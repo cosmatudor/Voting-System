@@ -1,0 +1,45 @@
+# === Node.js ===
+node_modules/
+dist/
+.env
+.env.*.local
+*/.env
+*.log
+
+# === Next.js ===
+.next/
+out/
+frontend/certs
+node_modules/
+
+# === Rust (Smart Contract) ===
+blockchain/target/
+blockchain/output/
+blockchain/wasm/
+blockchain/meta/
+*.wasm
+
+# === IDE-specific ===
+.vscode/
+.idea/
+*.swp
+
+# === OS junk ===
+.DS_Store
+Thumbs.db
+
+# === Lock files (opțional) ===
+pnpm-lock.yaml
+yarn.lock
+# păstrează doar unul: npm, yarn sau pnpm
+
+# === Tests / Coverage ===
+coverage/
+*.lcov
+.nyc_output/
+
+# === Build artifacts ===
+*.out
+*.log
+*.tmp
+*.bak

@@ -1,0 +1,276 @@
+{
+    "buildInfo": {
+        "rustc": {
+            "version": "1.84.1",
+            "commitHash": "e71f9a9a98b0faf423844bf0ba7438f29dc27d58",
+            "commitDate": "2025-01-27",
+            "channel": "Stable",
+            "short": "rustc 1.84.1 (e71f9a9a9 2025-01-27)"
+        },
+        "contractCrate": {
+            "name": "voting-system",
+            "version": "0.0.0"
+        },
+        "framework": {
+            "name": "multiversx-sc",
+            "version": "0.55.0"
+        }
+    },
+    "name": "VotingSystem",
+    "constructor": {
+        "inputs": [],
+        "outputs": []
+    },
+    "upgradeConstructor": {
+        "inputs": [],
+        "outputs": []
+    },
+    "endpoints": [
+        {
+            "name": "createCampaign",
+            "mutability": "mutable",
+            "inputs": [
+                {
+                    "name": "title",
+                    "type": "bytes"
+                },
+                {
+                    "name": "description",
+                    "type": "bytes"
+                },
+                {
+                    "name": "start_timestamp",
+                    "type": "u64"
+                },
+                {
+                    "name": "end_timestamp",
+                    "type": "u64"
+                },
+                {
+                    "name": "eligible_voters",
+                    "type": "List<Address>"
+                },
+                {
+                    "name": "options",
+                    "type": "List<bytes>"
+                },
+                {
+                    "name": "is_confidential",
+                    "type": "bool"
+                },
+                {
+                    "name": "is_sponsored",
+                    "type": "bool"
+                }
+            ],
+            "outputs": []
+        },
+        {
+            "name": "vote",
+            "mutability": "mutable",
+            "inputs": [
+                {
+                    "name": "campaign_id",
+                    "type": "u64"
+                },
+                {
+                    "name": "option",
+                    "type": "u8"
+                }
+            ],
+            "outputs": []
+        },
+        {
+            "name": "closeCampaign",
+            "mutability": "mutable",
+            "inputs": [
+                {
+                    "name": "campaign_id",
+                    "type": "u64"
+                }
+            ],
+            "outputs": []
+        },
+        {
+            "name": "getTalliedVotes",
+            "mutability": "readonly",
+            "inputs": [
+                {
+                    "name": "campaign_id",
+                    "type": "u64"
+                }
+            ],
+            "outputs": [
+                {
+                    "type": "List<u64>"
+                }
+            ]
+        },
+        {
+            "name": "getAllCampaigns",
+            "mutability": "readonly",
+            "inputs": [],
+            "outputs": [
+                {
+                    "type": "List<VotingCampaignView>"
+                }
+            ]
+        },
+        {
+            "name": "getCampaignById",
+            "mutability": "readonly",
+            "inputs": [
+                {
+                    "name": "campaign_id",
+                    "type": "u64"
+                }
+            ],
+            "outputs": [
+                {
+                    "type": "VotingCampaignDetails"
+                }
+            ]
+        },
+        {
+            "name": "isCampaignActive",
+            "mutability": "readonly",
+            "inputs": [
+                {
+                    "name": "campaign_id",
+                    "type": "u64"
+                }
+            ],
+            "outputs": [
+                {
+                    "type": "bool"
+                }
+            ]
+        }
+    ],
+    "events": [
+        {
+            "docs": [
+                "Events"
+            ],
+            "identifier": "createCampaignEvent",
+            "inputs": [
+                {
+                    "name": "campaign_id",
+                    "type": "u64",
+                    "indexed": true
+                },
+                {
+                    "name": "owner",
+                    "type": "Address",
+                    "indexed": true
+                }
+            ]
+        }
+    ],
+    "esdtAttributes": [],
+    "hasCallback": false,
+    "types": {
+        "VotingCampaignDetails": {
+            "type": "struct",
+            "fields": [
+                {
+                    "name": "campaign_id",
+                    "type": "u64"
+                },
+                {
+                    "name": "owner",
+                    "type": "Address"
+                },
+                {
+                    "name": "title",
+                    "type": "bytes"
+                },
+                {
+                    "name": "description",
+                    "type": "bytes"
+                },
+                {
+                    "name": "options",
+                    "type": "List<bytes>"
+                },
+                {
+                    "name": "start_timestamp",
+                    "type": "u64"
+                },
+                {
+                    "name": "end_timestamp",
+                    "type": "u64"
+                },
+                {
+                    "name": "votes",
+                    "type": "bytes"
+                },
+                {
+                    "name": "eligible_voters",
+                    "type": "List<Address>"
+                },
+                {
+                    "name": "is_tallied",
+                    "type": "bool"
+                },
+                {
+                    "name": "is_confidential",
+                    "type": "bool"
+                },
+                {
+                    "name": "is_sponsored",
+                    "type": "bool"
+                }
+            ]
+        },
+        "VotingCampaignView": {
+            "type": "struct",
+            "fields": [
+                {
+                    "name": "campaign_id",
+                    "type": "u64"
+                },
+                {
+                    "name": "owner",
+                    "type": "Address"
+                },
+                {
+                    "name": "title",
+                    "type": "bytes"
+                },
+                {
+                    "name": "description",
+                    "type": "bytes"
+                },
+                {
+                    "name": "start_timestamp",
+                    "type": "u64"
+                },
+                {
+                    "name": "end_timestamp",
+                    "type": "u64"
+                },
+                {
+                    "name": "votes_num",
+                    "type": "u64"
+                },
+                {
+                    "name": "eligible_voters",
+                    "type": "List<Address>"
+                },
+                {
+                    "name": "is_tallied",
+                    "type": "bool"
+                },
+                {
+                    "name": "is_confidential",
+                    "type": "bool"
+                },
+                {
+                    "name": "is_sponsored",
+                    "type": "bool"
+                }
+            ]
+        }
+    }
+}
