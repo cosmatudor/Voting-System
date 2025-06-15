@@ -19,7 +19,7 @@ export const useCreateCampaignTx = () => {
         const eligibleVotersArray = eligibleVoters.map(voter => new Address(voter));
         const interaction = smartContract.methods
             .createCampaign([title, description, startTimestamp, endTimestamp, eligibleVotersArray, options, isConfidential, is_sponsored])
-            .withGasLimit(BigInt(10000000))
+            .withGasLimit(BigInt(200_000_000))
             .withChainID(getChainID())
             .withSender(Address.newFromBech32(account.address))
             .buildTransaction()

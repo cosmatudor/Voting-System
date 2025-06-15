@@ -12,7 +12,7 @@ export const useSimpleVoteTx = () => {
     ) => { 
         const interaction = smartContract.methods
             .vote([BigInt(campaignId), BigInt(optionId)])
-            .withGasLimit(BigInt(10000000))
+            .withGasLimit(BigInt(10_000_000))
             .withChainID(getChainID())
             .withSender(Address.newFromBech32(account.address))
             .buildTransaction()

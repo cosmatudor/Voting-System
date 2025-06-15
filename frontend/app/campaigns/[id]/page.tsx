@@ -158,7 +158,7 @@ export default function CampaignDetailsPage() {
 		try {
 			let voteTx;
 			if (campaign.is_sponsored) {
-				const token = "ZXJkMXMyajhqaGZhYTMzc21lemQwZHd2cGVxbWVkbjR4NzM1aDByZTI0NXM2cjN4anhhNms5YXNmMzlkNHc.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuNjAzYzE5NzBkMDRkZmVjNDEyZTJlN2FlNzI1NzljNmFkODNmNWQxNWQyYzYzYmJjOTRlNmQ0NTcxMzk2N2MxMi43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTkRrNE16ZzJPREI5.87393ea4e3cf9dbc0983f7e62c9fe6bf2c2a4bfc2d5fe11f9478a88825b4a671cd6130ff43afedb0711658b1ec6ca57a9d6922e0a352f4d609f134f9b3976504"
+				const token = "ZXJkMTRkcTZqbHp2bXo2a2pzamdza3hjd3hsd2o4NThtYzVyc2U5emM3dWRudGphY2M0bXU0MnN5djYza3o.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuNzk2N2NiYmZkMjYzMTNmMzkwOGIxNGUxZGYzNTVkMmUzNGQ5MzI3OTdmNjc1Y2Q4OTc2OTc4Yjk0Mjk1MWI0Yi43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTkRrNU1EY3hNRE45.61f3727db1214fb864c61b0cffe0f64f912a86f66ac7d07c1f26c609885a87abe97d2706f849994fe1be57b0c6b0441058606b2ac6b6f10ac4911c7c5f1a3006"
 				const response = await fetch('http://localhost:3001/relayer-vote-transaction', {
 					method: 'POST',
 					headers: { 

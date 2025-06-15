@@ -216,11 +216,10 @@ export default function CreateVotePage() {
 		setShowFundingInfo(false);
 		setCreationError(null);
 		try {
-			// Save form data before redirecting to xPortal
 			localStorage.setItem('draftVote', JSON.stringify(formData));
 			localStorage.setItem('isFunding', 'true');
 
-			const token = "ZXJkMXhnMHA5Z2djY2c2cjZhN2c5ajZ0Zmw3MDhwNmowNDRkd2c1c2RncmZzNXN3MjRzeGQ0c3E2amRtajI.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuODllNmM3Y2IyZjg3ZjM4M2Q2NzQ1NDZlOGQzODcxYzJiYmIzY2E0ZDZmMThhNjNmNTEwNjg4MzcwZjI4OTU3MC43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTkRrNE1EY3hOREI5.13254551570e5563c5dd71a360137a56631565b094cf97b328e7abf43c284ced4953bc34652647443c399c1205c095d8e083485a707eb9150cc9921d09691a0b"
+			const token = "ZXJkMXhnMHA5Z2djY2c2cjZhN2c5ajZ0Zmw3MDhwNmowNDRkd2c1c2RncmZzNXN3MjRzeGQ0c3E2amRtajI.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuOTRhMDU4ZTExMjU2M2MwY2EzOTMxNjQ1ZDBiYjhjYTI0ZjMwOWRkNzE5NGMwN2M1YWQ1MWM1YzJhZjVjZjYxNi43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTkRrNE9UUXlNekI5.f3cf40bf39911ec029a9a48f8c1d95ae5242059d5fc555a433b5da7e5bd7c4cb73c6f80ccd35627b474c1bb076f4cf541673f227ca28ab1ca0ec66415502840e"
 			console.log("AICI",token);
 			const response = await fetch('http://localhost:3001/login', {
 				method: 'POST',
@@ -507,7 +506,7 @@ export default function CreateVotePage() {
 													<Button
 														variant='outline'
 														className={`w-full justify-start text-left font-normal ${
-															!formData.startDate && 'text-slate-400'
+															!formData.startDate ? 'text-slate-400' : 'text-white'
 														} bg-slate-800 border-slate-700 hover:bg-slate-700`}
 													>
 														<CalendarIcon className='mr-2 h-4 w-4' />
@@ -537,7 +536,7 @@ export default function CreateVotePage() {
 													<Button
 														variant='outline'
 														className={`w-full justify-start text-left font-normal ${
-															!formData.endDate && 'text-slate-400'
+															!formData.endDate ? 'text-slate-400' : 'text-white'
 														} bg-slate-800 border-slate-700 hover:bg-slate-700`}
 													>
 														<CalendarIcon className='mr-2 h-4 w-4' />
