@@ -63,7 +63,7 @@ import {
 	DialogTitle,
 } from '@/components/ui/dialog';
 import { useCloseCampaignTx } from '@/hooks/transactions/useCloseCampaignTx';
-import { Address, DevnetEntrypoint, Transaction } from '@multiversx/sdk-core/out';
+import { Address, Transaction } from '@multiversx/sdk-core/out';
 
 export default function CampaignDetailsPage() {
 	const params = useParams();
@@ -84,18 +84,6 @@ export default function CampaignDetailsPage() {
 	const { getSimpleVoteTx } = useSimpleVoteTx();
 	const { getTalliedVotes, tallyResults } = useGetTalliedVotes();
 	const { getCloseCampaignTx } = useCloseCampaignTx();
-
-	useEffect(() => {
-		if (!voteSessionId) return;
-
-		const txInfo = signedTransactions?.[voteSessionId];
-
-		if (txInfo?.status === "signed") {
-			const voteTx = txInfo.transactions?.[0];
-			console.log("Tranzacție semnată:", voteTx);
-		}
-
-	}, [signedTransactions, voteSessionId]);
 
 	// Get vote transaction status
 	const voteTxStatus = useTrackTransactionStatus({
@@ -158,7 +146,7 @@ export default function CampaignDetailsPage() {
 		try {
 			let voteTx;
 			if (campaign.is_sponsored) {
-				const token = "ZXJkMTRkcTZqbHp2bXo2a2pzamdza3hjd3hsd2o4NThtYzVyc2U5emM3dWRudGphY2M0bXU0MnN5djYza3o.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuNzk2N2NiYmZkMjYzMTNmMzkwOGIxNGUxZGYzNTVkMmUzNGQ5MzI3OTdmNjc1Y2Q4OTc2OTc4Yjk0Mjk1MWI0Yi43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTkRrNU1EY3hNRE45.61f3727db1214fb864c61b0cffe0f64f912a86f66ac7d07c1f26c609885a87abe97d2706f849994fe1be57b0c6b0441058606b2ac6b6f10ac4911c7c5f1a3006"
+				const token = "ZXJkMWR2ZzAwc2R4OXJ2Zjh3d2docnI3cWdtN3RzZnVxOG5oZDM0Zjh2OGtlcDVwMmt0bXEzdnF4NTI4NzU.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuYmJlYmJiYzYyMmU0MzNlZWNkYTMzMjFlNjcxMmZhNTI4MWYyMDMyNmI0Y2JmNzBhYjk5YWU1YWNkMTE4MjQ5OC43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTlRBeE9EZzROamg5.355167702b1461be62da8ba23c605786d21bd69e5d0143245be810769254ebd31c7035f85bb0659f06863402770f54b1f659cd5b0c54f1b16ae94b6ca8785209"
 				const response = await fetch('http://localhost:3001/relayer-vote-transaction', {
 					method: 'POST',
 					headers: { 
@@ -182,15 +170,28 @@ export default function CampaignDetailsPage() {
 			}
 
 			console.log('CE AM PRIMIT:', voteTx);
+			const txn = new Transaction({
+				nonce: voteTx.nonce,
+				value: voteTx.value,
+				sender: new Address(voteTx.sender),
+				receiver: new Address(voteTx.receiver),
+				gasPrice: voteTx.gasPrice,
+				gasLimit: voteTx.gasLimit,
+				data: voteTx.data,
+				chainID: voteTx.chainID,
+				version: voteTx.version,
+				relayer: new Address(voteTx.relayer),
+				relayerSignature: Buffer.from(voteTx.relayerSignature, "hex"),
+			})
 
 			const { sessionId: newSessionId } = await sendTransactions({
-				transactions: [voteTx],
+				transactions: [txn],
 				transactionsDisplayInfo: {
 					processingMessage: 'Submitting vote...',
 					errorMessage: 'Failed to submit vote',
 					successMessage: 'Vote submitted successfully!',
 				},
-				// signWithoutSending: true,
+				redirectAfterSign: false,
 			});
 
 			setVoteSessionId(newSessionId);

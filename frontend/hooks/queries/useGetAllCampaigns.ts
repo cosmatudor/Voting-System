@@ -91,7 +91,7 @@ export const useGetAllCampaigns = () => {
                     is_tallied: campaign.is_tallied,
                     is_confidential: campaign.is_confidential,
                     is_sponsored: campaign.is_sponsored,
-                    eligible_voters: campaign.eligible_voters.map((v: any) => v.bech32)
+                    eligible_voters: campaign.eligible_voters.map((x: any) => x.bech32()),
                 };
             });
 

@@ -219,7 +219,7 @@ export default function CreateVotePage() {
 			localStorage.setItem('draftVote', JSON.stringify(formData));
 			localStorage.setItem('isFunding', 'true');
 
-			const token = "ZXJkMXhnMHA5Z2djY2c2cjZhN2c5ajZ0Zmw3MDhwNmowNDRkd2c1c2RncmZzNXN3MjRzeGQ0c3E2amRtajI.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuOTRhMDU4ZTExMjU2M2MwY2EzOTMxNjQ1ZDBiYjhjYTI0ZjMwOWRkNzE5NGMwN2M1YWQ1MWM1YzJhZjVjZjYxNi43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTkRrNE9UUXlNekI5.f3cf40bf39911ec029a9a48f8c1d95ae5242059d5fc555a433b5da7e5bd7c4cb73c6f80ccd35627b474c1bb076f4cf541673f227ca28ab1ca0ec66415502840e"
+			const token = "ZXJkMXhnMHA5Z2djY2c2cjZhN2c5ajZ0Zmw3MDhwNmowNDRkd2c1c2RncmZzNXN3MjRzeGQ0c3E2amRtajI.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuNTMyNWUxMzY5MTdjZDZjMjIxMzZlODUxYjFkYThiMDk1N2I1ZGU5ZjA1MzY1NGU4NTAxOWFjZTQzNWRmYjlkMS43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTlRBeE9EZzRORGg5.ce46164a38576292fc287a23cd0c5abc9d41033c40682457f9ca5b1683f693176866f10b8994982aa2e885993ddd320a1852c409a435f132b0d91bbf6964c804"
 			console.log("AICI",token);
 			const response = await fetch('http://localhost:3001/login', {
 				method: 'POST',

@@ -50,9 +50,9 @@ export default function CampaignsPage() {
 	// Check if user is eligible to vote
 	const isEligible = (campaign: FormattedCampaign) => {
 		if (!address || !campaign.eligible_voters) return false;
-
-		const eligibleAddrsStrArr = campaign.eligible_voters.map((addr) => addr.toString());
-		return eligibleAddrsStrArr.includes(address);
+		console.log("eligible_voters", campaign.eligible_voters)
+		console.log("address", address)
+		return campaign.eligible_voters.includes(address);
 	};
 
 	if (isLoading) {

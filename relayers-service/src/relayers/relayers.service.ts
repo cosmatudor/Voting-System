@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RelayerEntity } from './entities/relayer.entity/relayer.entity';
 import { UserEntity } from '../users/entities/user.entity/user.entity';
-import { Account, Address, DevnetEntrypoint, IPlainTransactionObject, KeyPair, Transaction, UserSecretKey } from '@multiversx/sdk-core';
+import { Account, Address, DevnetEntrypoint, IPlainTransactionObject, KeyPair, Transaction, U64Value, U8Value, UserSecretKey } from '@multiversx/sdk-core';
 
 import * as crypto from 'crypto';
 import { ContractLoader } from '@multiversx/sdk-nestjs-common';
@@ -70,8 +70,10 @@ export class RelayersService {
         const currentNonce = await entrypoint.recallAccountNonce(userAddress);
 
         const functionName = "vote";
-        const campaignIdHex = campaignId.toString(16).padStart(1, '0');
-        const optionHex = option.toString(16).padStart(1, '0');
+        const campaignIdHex = campaignId.toString(16).padStart(16, '0');
+        const optionHex = option.toString(16).padStart(2, '0');
+        // const campaignIdHex = new U64Value(BigInt(campaignId)).toString();
+        // const optionHex = new U8Value(option).toString();
         const dataPayload = `${functionName}@${campaignIdHex}@${optionHex}`;
 
        
