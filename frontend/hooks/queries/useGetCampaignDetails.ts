@@ -89,8 +89,7 @@ export const useGetCampaignDetails = (campaignId: number) => {
             // Get vote results
             let results: number[] = [];
             let totalVotes = 0;
-            if (campaignDetails.is_confidential || campaignDetails.is_tallied) {
-                // Confidential or tallied: use getTalliedVotes
+            if (campaignDetails.is_tallied) {
                 const response2 = await controller.query({
                     contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqjtl4cwve2vfx3cvvswgdhcmvx4zms4jmd4sq69lcx0"),
                     function: "getTalliedVotes",
@@ -100,7 +99,6 @@ export const useGetCampaignDetails = (campaignId: number) => {
                 results = tallyData ? tallyData.map((count: bigint) => Number(count)) : [];
                 totalVotes = results.reduce((sum: number, count: number) => sum + count, 0);
             } else {
-                // Public and not tallied: count votes from campaign.votes
                 const optionsNum = campaignDetails.options.length;
                 results = Array(optionsNum).fill(0);
                 for (const vote of campaignDetails.votes) {
@@ -135,11 +133,11 @@ export const useGetCampaignDetails = (campaignId: number) => {
                 },
                 options,
                 totalVotes,
-                    results,
-                    is_tallied: campaignDetails.is_tallied,
-                    is_confidential: campaignDetails.is_confidential,
-                    is_sponsored: campaignDetails.is_sponsored,
-                    eligible_voters: campaignDetails.eligible_voters.map(voter => voter.valueOf().toString())
+                results,
+                is_tallied: campaignDetails.is_tallied,
+                is_confidential: campaignDetails.is_confidential,
+                is_sponsored: campaignDetails.is_sponsored,
+                eligible_voters: campaignDetails.eligible_voters.map(voter => voter.valueOf().toString())
             };
 
             setCampaign(formattedCampaign);

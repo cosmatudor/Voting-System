@@ -51,7 +51,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useGetCampaignDetails } from '@/hooks/queries/useGetCampaignDetails';
 import { useSimpleVoteTx } from '@/hooks/transactions/useSimpleVoteTx';
 import { sendTransactions } from "@multiversx/sdk-dapp/services/transactions/sendTransactions";
-import { useGetIsLoggedIn, useGetAccount, useGetPendingTransactions, useTrackTransactionStatus, useGetSignedTransactions } from '@multiversx/sdk-dapp/hooks';
+import { useGetIsLoggedIn, useGetAccount, useGetPendingTransactions, useTrackTransactionStatus, useGetSignedTransactions, useGetLoginInfo } from '@multiversx/sdk-dapp/hooks';
 import { refreshAccount } from '@multiversx/sdk-dapp/utils';
 import { useGetTalliedVotes } from '@/hooks/queries/useGetTalliedVotes';
 import {
@@ -63,7 +63,7 @@ import {
 	DialogTitle,
 } from '@/components/ui/dialog';
 import { useCloseCampaignTx } from '@/hooks/transactions/useCloseCampaignTx';
-import { Address, Transaction } from '@multiversx/sdk-core/out';
+
 
 export default function CampaignDetailsPage() {
 	const params = useParams();
@@ -76,11 +76,11 @@ export default function CampaignDetailsPage() {
 	const [isTallying, setIsTallying] = useState(false);
 	const [voteResults, setVoteResults] = useState<number[]>([]);
 	const [voteSessionId, setVoteSessionId] = useState<string | null>(null);
+	const [tallyTxSessionId, setTallyTxSessionId] = useState<string | null>(null);
 
-	const isLoggedIn = useGetIsLoggedIn();
+	const { isLoggedIn } = useGetLoginInfo();
 	const { address } = useGetAccount();
 	const { campaign, isLoading, error, refetch } = useGetCampaignDetails(campaignId);
-	const { signedTransactions } = useGetSignedTransactions();
 	const { getSimpleVoteTx } = useSimpleVoteTx();
 	const { getTalliedVotes, tallyResults } = useGetTalliedVotes();
 	const { getCloseCampaignTx } = useCloseCampaignTx();
@@ -100,6 +100,23 @@ export default function CampaignDetailsPage() {
 		onCancelled: () => {
 			setVoteError('Vote transaction was cancelled.');
 			setIsVoting(false);
+		}
+	});
+
+	const tallyTxStatus = useTrackTransactionStatus({
+		transactionId: tallyTxSessionId,
+		onSuccess: async () => {
+			await getTalliedVotes(BigInt(campaignId));
+			await refetch();
+		},
+		onFail: (errorMessage) => {
+			setVoteError(`Failed to tally votes: ${errorMessage}`);
+			setIsTallying(false);
+		},
+		onCancelled: () => {
+			setVoteError('Tally transaction was cancelled.');
+			setIsTallying(false);
+			setShowTallyWarning(false);
 		}
 	});
 
@@ -146,7 +163,7 @@ export default function CampaignDetailsPage() {
 		try {
 			let voteTx;
 			if (campaign.is_sponsored) {
-				const token = "ZXJkMWR2ZzAwc2R4OXJ2Zjh3d2docnI3cWdtN3RzZnVxOG5oZDM0Zjh2OGtlcDVwMmt0bXEzdnF4NTI4NzU.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuYmJlYmJiYzYyMmU0MzNlZWNkYTMzMjFlNjcxMmZhNTI4MWYyMDMyNmI0Y2JmNzBhYjk5YWU1YWNkMTE4MjQ5OC43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTlRBeE9EZzROamg5.355167702b1461be62da8ba23c605786d21bd69e5d0143245be810769254ebd31c7035f85bb0659f06863402770f54b1f659cd5b0c54f1b16ae94b6ca8785209"
+				const token = "ZXJkMXpld2xnOXVzNzl2c3dqbDYybXhqYzVoYWhocHdwczBzZG1lczl2NXpocDZyYXZ3dDM4cXM5Nm44cmc.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuYzdhZTM5NjRjOWRmYTkzNjI5YWZhOTA2MTVkYzFmOTBiZjY1NTA0NTY5ZTI2OWEyMTI0NzBjMzMwMjIzODBmNC43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTlRBeU5qRTBPRFI5.c683474254f00cd0a850150d2bf9d3793016bfc1adfb25e8584b158712b2b7574c5280fb073750181a5aa92519c04f6002ee288b39fa48b64b7c8107d3da200a"
 				const response = await fetch('http://localhost:3001/relayer-vote-transaction', {
 					method: 'POST',
 					headers: { 
@@ -169,29 +186,29 @@ export default function CampaignDetailsPage() {
 				console.log('not sponsored')
 			}
 
-			console.log('CE AM PRIMIT:', voteTx);
-			const txn = new Transaction({
-				nonce: voteTx.nonce,
-				value: voteTx.value,
-				sender: new Address(voteTx.sender),
-				receiver: new Address(voteTx.receiver),
-				gasPrice: voteTx.gasPrice,
-				gasLimit: voteTx.gasLimit,
-				data: voteTx.data,
-				chainID: voteTx.chainID,
-				version: voteTx.version,
-				relayer: new Address(voteTx.relayer),
-				relayerSignature: Buffer.from(voteTx.relayerSignature, "hex"),
-			})
+			// console.log('CE AM PRIMIT:', voteTx);
+			// const txn = new Transaction({
+			// 	nonce: voteTx.nonce,
+			// 	value: voteTx.value,
+			// 	sender: new Address(voteTx.sender),
+			// 	receiver: new Address(voteTx.receiver),
+			// 	gasPrice: voteTx.gasPrice,
+			// 	gasLimit: voteTx.gasLimit,
+			// 	data: voteTx.data,
+			// 	chainID: voteTx.chainID,
+			// 	version: voteTx.version,
+			// 	relayer: new Address(voteTx.relayer),
+			// 	relayerSignature: Buffer.from(voteTx.relayerSignature, "hex"),
+			// })
 
 			const { sessionId: newSessionId } = await sendTransactions({
-				transactions: [txn],
+				transactions: [voteTx],
 				transactionsDisplayInfo: {
 					processingMessage: 'Submitting vote...',
 					errorMessage: 'Failed to submit vote',
 					successMessage: 'Vote submitted successfully!',
 				},
-				redirectAfterSign: false,
+				// redirectAfterSign: false,
 			});
 
 			setVoteSessionId(newSessionId);
@@ -209,7 +226,7 @@ export default function CampaignDetailsPage() {
 		try {
 			// First close the campaign
 			const tx = await getCloseCampaignTx(Number(campaignId));
-			await sendTransactions({
+			const { sessionId: newSessionId } =  await sendTransactions({
 				transactions: [tx],
 				transactionsDisplayInfo: {
 					processingMessage: 'Closing campaign...',
@@ -218,13 +235,7 @@ export default function CampaignDetailsPage() {
 				},
 			});
 
-			// Wait for transaction confirmation
-			await refreshAccount();
-			
-			// Then get the tallied votes
-			await getTalliedVotes(BigInt(campaignId));
-			
-			await refetch();
+			setTallyTxSessionId(newSessionId);			
 		} catch (error) {
 			console.error('Error tallying votes:', error);
 			setVoteError(error instanceof Error ? error.message : 'Failed to tally votes');
@@ -406,8 +417,8 @@ export default function CampaignDetailsPage() {
 												>
 													{option.label}
 												</Label>
-												{/* Only show votes and progress bar if not confidential */}
-												{!campaign.is_confidential && campaign.results && (
+												{/* Only show votes and progress bar if not confidential OR if tallied */}
+												{(!campaign.is_confidential || campaign.is_tallied) && campaign.results && (
 													<div className="mt-2">
 														<div className="flex items-center justify-between text-sm">
 															<span className="text-slate-400">Votes</span>
@@ -423,6 +434,13 @@ export default function CampaignDetailsPage() {
 																}}
 															></div>
 														</div>
+													</div>
+												)}
+												{/* Show confidential message for confidential campaigns that aren't tallied */}
+												{campaign.is_confidential && !campaign.is_tallied && (
+													<div className="mt-2 flex items-center gap-2 text-sm text-slate-400">
+														<Lock className="h-4 w-4 text-purple-400" />
+														<span>Results hidden until voting ends</span>
 													</div>
 												)}
 											</div>
@@ -592,7 +610,7 @@ export default function CampaignDetailsPage() {
 									</h3>
 									<p className="text-sm text-slate-400">
 										{campaign.is_confidential
-											? 'Your vote is encrypted and private'
+											? 'Your vote is private'
 											: 'Votes are updating live and visible to everyone'}
 									</p>
 								</div>
@@ -654,7 +672,9 @@ export default function CampaignDetailsPage() {
 								</div>
 								<div>
 									<h3 className="font-medium text-white">Total Votes</h3>
-									<p className="text-sm text-slate-400">{campaign.totalVotes} votes cast</p>
+									<p className="text-sm text-slate-400">
+										{campaign.totalVotes} votes cast
+									</p>
 								</div>
 							</div>
 

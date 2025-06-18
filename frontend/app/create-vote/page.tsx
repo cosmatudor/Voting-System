@@ -68,6 +68,7 @@ const defaultFormData = {
 	],
 	eligibleWallets: [] as string[],
 	is_sponsored: false,
+	is_confidential: false,
 };
 
 export default function CreateVotePage() {
@@ -219,7 +220,7 @@ export default function CreateVotePage() {
 			localStorage.setItem('draftVote', JSON.stringify(formData));
 			localStorage.setItem('isFunding', 'true');
 
-			const token = "ZXJkMXhnMHA5Z2djY2c2cjZhN2c5ajZ0Zmw3MDhwNmowNDRkd2c1c2RncmZzNXN3MjRzeGQ0c3E2amRtajI.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuNTMyNWUxMzY5MTdjZDZjMjIxMzZlODUxYjFkYThiMDk1N2I1ZGU5ZjA1MzY1NGU4NTAxOWFjZTQzNWRmYjlkMS43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTlRBeE9EZzRORGg5.ce46164a38576292fc287a23cd0c5abc9d41033c40682457f9ca5b1683f693176866f10b8994982aa2e885993ddd320a1852c409a435f132b0d91bbf6964c804"
+			const token = "ZXJkMXhnMHA5Z2djY2c2cjZhN2c5ajZ0Zmw3MDhwNmowNDRkd2c1c2RncmZzNXN3MjRzeGQ0c3E2amRtajI.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuNjgzYmFkOGZkNDJhNmZkMjYxYTQwNTQ1NDkxODg0MGU4YTQ3Y2UwMjQyZWE0ZTlmZjA3NTk2ODczNTcxNTc2Zi43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTlRBeU5qRTBOakI5.748044191e1e9997dffdefd5c287fa5762f3bd9aa12204706ecf3177eb393e821de28cd193854b404b1c9adac0ca442478baaa7a1eb240d09cec066483e22700"
 			console.log("AICI",token);
 			const response = await fetch('http://localhost:3001/login', {
 				method: 'POST',
@@ -286,7 +287,7 @@ export default function CreateVotePage() {
 				endTimestamp,
 				formData.eligibleWallets,
 				options,
-				false,
+				formData.is_confidential,
 				formData.is_sponsored
 			);
 			const { sessionId: newSessionId } = await sendTransactions({
@@ -663,6 +664,49 @@ export default function CreateVotePage() {
 												</div>
 											</Alert>
 										)}
+									</div>
+
+									<div className="space-y-4">
+										<h3 className="text-lg font-medium text-white">Confidentiality</h3>
+										<p className="text-xs text-slate-400 mb-2">
+											Choose whether live results are visible during the campaign or only after it is tallied. Confidential campaigns keep results hidden until the end.
+										</p>
+										<RadioGroup
+											value={formData.is_confidential ? 'confidential' : 'public'}
+											onValueChange={(value) => setFormData({ ...formData, is_confidential: value === 'confidential' })}
+											className="grid grid-cols-2 gap-4"
+										>
+											<div>
+												<RadioGroupItem value="public" id="public" className="peer sr-only" />
+												<Label
+													htmlFor="public"
+													className="flex flex-col items-center justify-between rounded-md border-2 border-slate-700 bg-slate-800 p-4 hover:bg-slate-700 peer-data-[state=checked]:border-purple-500 [&:has([data-state=checked])]:border-purple-500"
+												>
+													<div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-purple-500/10">
+														<Users className="h-6 w-6 text-purple-500" />
+													</div>
+													<span className="text-white">Public</span>
+													<span className="text-xs text-slate-400 text-center mt-1">
+														Live results are visible during the campaign
+													</span>
+												</Label>
+											</div>
+											<div>
+												<RadioGroupItem value="confidential" id="confidential" className="peer sr-only" />
+												<Label
+													htmlFor="confidential"
+													className="flex flex-col items-center justify-between rounded-md border-2 border-slate-700 bg-slate-800 p-4 hover:bg-slate-700 peer-data-[state=checked]:border-purple-500 [&:has([data-state=checked])]:border-purple-500"
+												>
+													<div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-purple-500/10">
+														<Lock className="h-6 w-6 text-purple-500" />
+													</div>
+													<span className="text-white">Confidential</span>
+													<span className="text-xs text-slate-400 text-center mt-1">
+														Live results are hidden until the campaign is tallied
+													</span>
+												</Label>
+											</div>
+										</RadioGroup>
 									</div>
 
 									<div className="space-y-4">
