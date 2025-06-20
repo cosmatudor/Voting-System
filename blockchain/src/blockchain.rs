@@ -2,7 +2,7 @@
 
 #[allow(unused_imports)]
 
-mod storage;
+pub mod storage;
 use multiversx_sc::imports::*;
 use storage::{VotingCampaign, VotingCampaignView, VotingCampaignDetails};
 
