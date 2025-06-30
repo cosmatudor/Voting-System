@@ -36,14 +36,6 @@ import {
 	Wallet,
 	Gift,
 } from 'lucide-react';
-import Link from 'next/link';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useCreateCampaignTx } from "@/hooks/transactions/useCreateCampaignTx";
-import {sendTransactions} from "@multiversx/sdk-dapp/services/transactions/sendTransactions";
-import { useRouter } from 'next/navigation';
-import { buildMerkleTree } from '@/lib/utils/merkleTree';
-import { useGetLoginInfo, useTrackTransactionStatus } from '@multiversx/sdk-dapp/hooks';
 import {
 	Dialog,
 	DialogContent,
@@ -54,6 +46,18 @@ import {
 	DialogClose,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+import {sendTransactions} from "@multiversx/sdk-dapp/services";
+import { useTrackTransactionStatus, useGetAccountInfo, useGetLoginInfo } from '@multiversx/sdk-dapp/hooks';
+import { NativeAuthClient } from "@multiversx/sdk-native-auth-client"
+import { ExtensionProvider } from "@multiversx/sdk-extension-provider";
+
+import { useCreateCampaignTx } from "@/hooks/transactions/useCreateCampaignTx";
+
 
 // Default form data
 const defaultFormData = {
@@ -94,32 +98,38 @@ export default function CreateVotePage() {
 	const transactionStatus = useTrackTransactionStatus({
 		transactionId: sessionId,
 		onSuccess: () => {
-			if (fundingConfirmed) {
-				setFormData(defaultFormData);
-				localStorage.removeItem('draftVote');
-				router.push('/campaigns');
-			} else {
+			if (formData.is_sponsored && !fundingConfirmed) {
 				setFundingConfirmed(true);
 				setIsFunding(false);
 				toast.success('Relayer funded successfully! You can now create your campaign.');
+			} else {
+				setFormData(defaultFormData);
+				setFundingConfirmed(false);
+				localStorage.removeItem('draftVote');
+				router.push('/campaigns');
 			}
 		},
 		onFail: (errorMessage) => {
-			if (fundingConfirmed) {
-				setCreationError(errorMessage || 'Transaction failed. Please try again.');
-				setIsCreating(false);
-			} else {
+			if (formData.is_sponsored && !fundingConfirmed) {
 				setCreationError(errorMessage || 'Funding failed. Please try again.');
 				setIsFunding(false);
+			} else {
+				setCreationError(errorMessage || 'Transaction failed. Please try again.');
+				setIsCreating(false);
+				setFormData(defaultFormData);
+				localStorage.removeItem('draftVote');
 			}
 		},
 		onCancelled: () => {
-			if (fundingConfirmed) {
-				setCreationError('Transaction was cancelled. Please try again.');
-				setIsCreating(false);
-			} else {
+			if (formData.is_sponsored && !fundingConfirmed) {
 				setCreationError('Funding was cancelled. Please try again.');
 				setIsFunding(false);
+			} else {
+				setCreationError('Transaction was cancelled. Please try again.');
+				setIsCreating(false);
+				setFormData(defaultFormData);
+				localStorage.removeItem('draftVote');
+				// Optionally: router.push('/campaigns');
 			}
 		}
 	});
@@ -127,7 +137,7 @@ export default function CreateVotePage() {
 	// Load any saved draft from local storage
 	useEffect(() => {
 		const savedVoteData = localStorage.getItem('draftVote');
-		const wasFunding = localStorage.getItem('isFunding') === 'true';
+		// const wasFunding = localStorage.getItem('isFunding') === 'true';
 		
 		if (savedVoteData) {
 			try {
@@ -139,11 +149,11 @@ export default function CreateVotePage() {
 					parsedData.endDate = new Date(parsedData.endDate);
 				setFormData(parsedData);
 				
-				// If we were in the funding process, restore that state
-				if (wasFunding) {
-					setIsFunding(true);
-					localStorage.removeItem('isFunding');
-				}
+				// // If we were in the funding process, restore that state
+				// if (wasFunding) {
+				// 	setIsFunding(true);
+				// 	localStorage.removeItem('isFunding');
+				// }
 			} catch (error) {
 				console.error('Failed to parse vote data from localStorage:', error);
 			}
@@ -154,6 +164,19 @@ export default function CreateVotePage() {
 	useEffect(() => {
 		localStorage.setItem('draftVote', JSON.stringify(formData));
 	}, [formData]);
+
+	// // Add this effect after your other useEffects
+	// useEffect(() => {
+	// 	// If there is no sessionId or the transaction is not pending, reset state
+	// 	if (!sessionId || !transactionStatus.isPending) {
+	// 		setIsFunding(false);
+	// 		setIsCreating(false);
+	// 		setFundingConfirmed(false);
+	// 		setSessionId(null);
+	// 		localStorage.removeItem('isFunding');
+	// 		// localStorage.removeItem('draftVote');
+	// 	}
+	// }, [sessionId, transactionStatus.isPending]);
 
 	const handleInputChange = (
 		e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -212,6 +235,33 @@ export default function CreateVotePage() {
 		setShowFundingInfo(true);
 	};
 
+	const provider = ExtensionProvider.getInstance();
+	const nativeAuthClient = new NativeAuthClient({
+		origin: "https://utils.multiversx.com",
+		expirySeconds: 7200,
+		apiUrl: "https://devnet-api.multiversx.com"
+	});
+
+	const getAuthToken = async () => {
+		// const acc = getAccount();
+		// console.log("add", acc.address)
+		// console.log("sig", acc.signature)
+
+		await provider.init();
+		const nativeAuthInitialPart = await nativeAuthClient.initialize();
+		await provider.login({ token: nativeAuthInitialPart });
+
+		const account = provider.getAccount()
+
+		if (!account || !account.address || !account.signature) {
+			throw new Error("Extension account or credentials not available");
+		  }
+		
+		const address = account.address;
+		const signature = account.signature;
+		return nativeAuthClient.getToken(address, nativeAuthInitialPart, signature)
+	}
+
 	const handleFundRelayer = async () => {
 		setIsFunding(true);
 		setShowFundingInfo(false);
@@ -220,13 +270,14 @@ export default function CreateVotePage() {
 			localStorage.setItem('draftVote', JSON.stringify(formData));
 			localStorage.setItem('isFunding', 'true');
 
-			const token = "ZXJkMXhnMHA5Z2djY2c2cjZhN2c5ajZ0Zmw3MDhwNmowNDRkd2c1c2RncmZzNXN3MjRzeGQ0c3E2amRtajI.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuNjgzYmFkOGZkNDJhNmZkMjYxYTQwNTQ1NDkxODg0MGU4YTQ3Y2UwMjQyZWE0ZTlmZjA3NTk2ODczNTcxNTc2Zi43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTlRBeU5qRTBOakI5.748044191e1e9997dffdefd5c287fa5762f3bd9aa12204706ecf3177eb393e821de28cd193854b404b1c9adac0ca442478baaa7a1eb240d09cec066483e22700"
-			console.log("AICI",token);
+			const nativeAuthToken = await getAuthToken()
+			console.log("auth token:", nativeAuthToken)
+
 			const response = await fetch('http://localhost:3001/login', {
 				method: 'POST',
 				headers: {
 				  'Content-Type': 'application/json',
-				  Authorization: `Bearer ${token}`,
+				  Authorization: `Bearer ${nativeAuthToken}`,
 				},
 			  });
 			  
@@ -235,11 +286,12 @@ export default function CreateVotePage() {
 			
 			const fundResponse = await fetch('http://localhost:3001/fund-relayer', {
 				method: 'GET',
-				headers: { Authorization: `Bearer ${token}` },
+				headers: { Authorization: `Bearer ${nativeAuthToken}` },
 			});
 			if (!fundResponse.ok) throw new Error('Failed to get funding transaction');
 			const { transaction: fundTxn } = await fundResponse.json();
-			const { sessionId } = await sendTransactions({
+
+			const { sessionId: id } = await sendTransactions({
 				transactions: [fundTxn],
 				transactionsDisplayInfo: {
 					processingMessage: 'Funding relayer...',
@@ -248,7 +300,8 @@ export default function CreateVotePage() {
 				},
 				redirectAfterSign: false,
 			});
-			setSessionId(sessionId);
+
+			setSessionId(id);
 		} catch (error) {
 			setCreationError('Funding failed. Please try again.');
 			setIsFunding(false);
@@ -299,6 +352,7 @@ export default function CreateVotePage() {
 				},
 				redirectAfterSign: false,
 			});
+	
 			setSessionId(newSessionId);
 		} catch (error) {
 			setCreationError(
@@ -525,6 +579,7 @@ export default function CreateVotePage() {
 														onSelect={handleStartDateChange}
 														initialFocus
 														className='bg-slate-900'
+														fromDate={new Date()}
 													/>
 												</PopoverContent>
 											</Popover>
@@ -555,6 +610,7 @@ export default function CreateVotePage() {
 														onSelect={handleEndDateChange}
 														initialFocus
 														className='bg-slate-900'
+														fromDate={new Date()}
 													/>
 												</PopoverContent>
 											</Popover>
@@ -830,7 +886,7 @@ export default function CreateVotePage() {
 												</span>
 											) : (
 												<span>
-													<b>Step 1 complete:</b> Relayer funded! You can now create your campaign.
+													<b>Step 2:</b> Relayer funded! You can now create your campaign.
 												</span>
 											)}
 										</Alert>

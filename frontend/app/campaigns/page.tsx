@@ -41,8 +41,8 @@ export default function CampaignsPage() {
 		
 		let matchesStatus = false;
 		if (selectedStatus === 'all') matchesStatus = true;
-		else if (selectedStatus === 'tallied') matchesStatus = campaign.is_tallied;
-		else matchesStatus = campaign.status === selectedStatus;
+		else if (selectedStatus === 'closed') matchesStatus = campaign.status === 'closed' || campaign.is_tallied;
+		else matchesStatus = campaign.status === selectedStatus && !campaign.is_tallied;
 		
 		return matchesSearch && matchesStatus;
 	});
@@ -111,7 +111,7 @@ export default function CampaignsPage() {
 				</div>
 
 				<Tabs defaultValue='all' className='w-full' onValueChange={setSelectedStatus}>
-					<TabsList className='grid w-full grid-cols-5 bg-slate-800/50'>
+					<TabsList className='grid w-full grid-cols-4 bg-slate-800/50'>
 						<TabsTrigger
 							value='all'
 							className='data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400'
@@ -135,12 +135,6 @@ export default function CampaignsPage() {
 							className='data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400'
 						>
 							Closed
-						</TabsTrigger>
-						<TabsTrigger
-							value='tallied'
-							className='data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400'
-						>
-							Tallied
 						</TabsTrigger>
 					</TabsList>
 				</Tabs>
@@ -188,11 +182,13 @@ export default function CampaignsPage() {
 									<div className='flex items-center gap-2'>
 										<Clock className='h-4 w-4 text-slate-500' />
 										<span className='text-slate-400'>
-											{campaign.status === 'active'
-												? `Ends in ${campaign.endTime}`
-												: campaign.status === 'upcoming'
-												? `Starts in ${campaign.startTime}`
-												: 'Ended'}
+											{(campaign.is_tallied || campaign.status === 'closed')
+												? 'Ended'
+												: campaign.status === 'active'
+													? `Ends in ${campaign.endTime}`
+													: campaign.status === 'upcoming'
+														? `Starts in ${campaign.startTime}`
+														: 'Ended'}
 										</span>
 									</div>
 									<div className='flex items-center gap-2'>

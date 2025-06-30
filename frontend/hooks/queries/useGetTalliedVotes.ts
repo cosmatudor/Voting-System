@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { DevnetEntrypoint, AbiRegistry, ProxyNetworkProvider } from "@multiversx/sdk-core/out";
-import abi from "@/abis/voting-system.abi.json";
+import abi from "@/abis/blockchain.abi.json";
 import { Address } from "@multiversx/sdk-core";
 
 export const useGetTalliedVotes = () => {
@@ -16,7 +16,7 @@ export const useGetTalliedVotes = () => {
         const controller = entrypoint.createSmartContractController(registry);
 
         const response = await controller.query({
-            contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqjtl4cwve2vfx3cvvswgdhcmvx4zms4jmd4sq69lcx0"),
+            contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqeu4l9869cnjk7dya8x0tv4spuxcraulzd4sqjdx63j"),
             function: "getTalliedVotes",
             arguments: [campaignId],
         });

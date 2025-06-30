@@ -5,7 +5,7 @@ import { API_URL } from "@/config";
 import { useGetAccountInfo } from "@multiversx/sdk-dapp/hooks";
 import { formatTimestamp } from "@/lib/utils";
 import { AbiRegistry } from "@multiversx/sdk-core";
-import abi from "@/abis/voting-system.abi.json";
+import abi from "@/abis/blockchain.abi.json";
 
 interface FormattedCampaignDetails {
     id: string;
@@ -65,7 +65,7 @@ export const useGetCampaignDetails = (campaignId: number) => {
             const controller = entrypoint.createSmartContractController(registry);
 
             const response = await controller.query({
-                contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqjtl4cwve2vfx3cvvswgdhcmvx4zms4jmd4sq69lcx0"),
+                contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqeu4l9869cnjk7dya8x0tv4spuxcraulzd4sqjdx63j"),
                 function: "getCampaignById",
                 arguments: [campaignId],
             });
@@ -91,7 +91,7 @@ export const useGetCampaignDetails = (campaignId: number) => {
             let totalVotes = 0;
             if (campaignDetails.is_tallied) {
                 const response2 = await controller.query({
-                    contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqjtl4cwve2vfx3cvvswgdhcmvx4zms4jmd4sq69lcx0"),
+                    contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqeu4l9869cnjk7dya8x0tv4spuxcraulzd4sqjdx63j"),
                     function: "getTalliedVotes",
                     arguments: [campaignId],
                 });

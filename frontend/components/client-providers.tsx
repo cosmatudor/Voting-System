@@ -19,20 +19,14 @@ const DappProvider = dynamic(
 
 export function ClientProviders({ children }: { children: React.ReactNode }) {
 	return (
-		<DappProvider
-			environment={ENVIRONMENT}
-			// customNetworkConfig={{
-			// 	name: 'customConfig',
-			// 	walletConnectV2ProjectId: 'c842a6d0c9eece9497bb3cc9ad9d0ae8',
-			//   }}
-		>
-				<QueryClientProvider client={queryClient}>
-					<TransactionsToastList />
-					<NotificationModal />
-					<SignTransactionsModals />
-						{children}
-						<Toaster />
-				</QueryClientProvider>
+		<DappProvider environment={ENVIRONMENT}>
+			<QueryClientProvider client={queryClient}>
+				<TransactionsToastList />
+				<NotificationModal />
+				<SignTransactionsModals />
+					{children}
+				<Toaster />
+			</QueryClientProvider>
 		</DappProvider>
 	);
 }

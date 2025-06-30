@@ -1,19 +1,19 @@
 {
     "buildInfo": {
         "rustc": {
-            "version": "1.84.1",
-            "commitHash": "e71f9a9a98b0faf423844bf0ba7438f29dc27d58",
-            "commitDate": "2025-01-27",
+            "version": "1.87.0",
+            "commitHash": "17067e9ac6d7ecb70e50f92c1944e545188d2359",
+            "commitDate": "2025-05-09",
             "channel": "Stable",
-            "short": "rustc 1.84.1 (e71f9a9a9 2025-01-27)"
+            "short": "rustc 1.87.0 (17067e9ac 2025-05-09)"
         },
         "contractCrate": {
-            "name": "voting-system",
+            "name": "blockchain",
             "version": "0.0.0"
         },
         "framework": {
             "name": "multiversx-sc",
-            "version": "0.55.0"
+            "version": "0.58.0"
         }
     },
     "name": "VotingSystem",

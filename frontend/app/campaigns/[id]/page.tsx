@@ -50,9 +50,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 import { useGetCampaignDetails } from '@/hooks/queries/useGetCampaignDetails';
 import { useSimpleVoteTx } from '@/hooks/transactions/useSimpleVoteTx';
-import { sendTransactions } from "@multiversx/sdk-dapp/services/transactions/sendTransactions";
-import { useGetIsLoggedIn, useGetAccount, useGetPendingTransactions, useTrackTransactionStatus, useGetSignedTransactions, useGetLoginInfo } from '@multiversx/sdk-dapp/hooks';
-import { refreshAccount } from '@multiversx/sdk-dapp/utils';
+import { sendTransactions, removeSignedTransaction } from "@multiversx/sdk-dapp/services";
+import { useGetAccount, useTrackTransactionStatus, useGetLoginInfo } from '@multiversx/sdk-dapp/hooks';
 import { useGetTalliedVotes } from '@/hooks/queries/useGetTalliedVotes';
 import {
 	Dialog,
@@ -63,6 +62,11 @@ import {
 	DialogTitle,
 } from '@/components/ui/dialog';
 import { useCloseCampaignTx } from '@/hooks/transactions/useCloseCampaignTx';
+import { ExtensionProvider } from "@multiversx/sdk-extension-provider";
+import { NativeAuthClient } from "@multiversx/sdk-native-auth-client";
+import {
+	getAccount,
+  } from "@multiversx/sdk-dapp/utils/account";
 
 
 export default function CampaignDetailsPage() {
@@ -93,8 +97,10 @@ export default function CampaignDetailsPage() {
 			setIsVoting(false);
 			setVoteError(null);
 		},
-		onFail: (errorMessage) => { // TODO: decode error code
-			setVoteError(errorMessage || 'Failed to submit vote. Please try again.');
+		onFail: (_, errorMessage) => {
+			let errorText = errorMessage || 'Transaction failed. Please try again.';
+			if (voteSessionId && errorMessage && (errorMessage.includes("Insufficient funds") ||errorMessage.includes("shard ID missmatch"))) removeSignedTransaction(voteSessionId);
+			setVoteError(errorText);
 			setIsVoting(false);
 		},
 		onCancelled: () => {
@@ -120,9 +126,16 @@ export default function CampaignDetailsPage() {
 		}
 	});
 
+	const account = useGetAccount()
+
+	useEffect(() => {
+		setVoteError(null)
+	}, [account.address])
+
 	// Refresh data when the page mounts
 	useEffect(() => {
 		refetch();
+		setVoteError(null)
 	}, [refetch]);
 
 	// Check if user is eligible to vote
@@ -137,6 +150,29 @@ export default function CampaignDetailsPage() {
 		if (!address || !campaign) return false;
 		return address === campaign.creator.address;
 	};
+
+	const provider = ExtensionProvider.getInstance();
+	const nativeAuthClient = new NativeAuthClient({
+		origin: "https://utils.multiversx.com",
+		expirySeconds: 7200,
+		apiUrl: "https://devnet-api.multiversx.com"
+	});
+
+	const getAuthToken = async () => {
+		await provider.init();
+		const nativeAuthInitialPart = await nativeAuthClient.initialize();
+		await provider.login({ token: nativeAuthInitialPart });
+
+		const account = provider.getAccount()
+
+		if (!account || !account.address || !account.signature) {
+			throw new Error("Extension account or credentials not available");
+		  }
+		
+		const address = account.address;
+		const signature = account.signature;
+		return nativeAuthClient.getToken(address, nativeAuthInitialPart, signature)
+	}
 
 	// Handle vote submission
 	const handleVote = async () => {
@@ -163,11 +199,11 @@ export default function CampaignDetailsPage() {
 		try {
 			let voteTx;
 			if (campaign.is_sponsored) {
-				const token = "ZXJkMXpld2xnOXVzNzl2c3dqbDYybXhqYzVoYWhocHdwczBzZG1lczl2NXpocDZyYXZ3dDM4cXM5Nm44cmc.YUhSMGNITTZMeTkxZEdsc2N5NXRkV3gwYVhabGNuTjRMbU52YlEuYzdhZTM5NjRjOWRmYTkzNjI5YWZhOTA2MTVkYzFmOTBiZjY1NTA0NTY5ZTI2OWEyMTI0NzBjMzMwMjIzODBmNC43MjAwLmV5SjBhVzFsYzNSaGJYQWlPakUzTlRBeU5qRTBPRFI5.c683474254f00cd0a850150d2bf9d3793016bfc1adfb25e8584b158712b2b7574c5280fb073750181a5aa92519c04f6002ee288b39fa48b64b7c8107d3da200a"
+				const nativeAuthToken = await getAuthToken()
 				const response = await fetch('http://localhost:3001/relayer-vote-transaction', {
 					method: 'POST',
 					headers: { 
-						'Authorization': `Bearer ${token}`,
+						'Authorization': `Bearer ${nativeAuthToken}`,
 						'Content-Type': 'application/json' 
 					},
 					body: JSON.stringify({
@@ -186,35 +222,29 @@ export default function CampaignDetailsPage() {
 				console.log('not sponsored')
 			}
 
-			// console.log('CE AM PRIMIT:', voteTx);
-			// const txn = new Transaction({
-			// 	nonce: voteTx.nonce,
-			// 	value: voteTx.value,
-			// 	sender: new Address(voteTx.sender),
-			// 	receiver: new Address(voteTx.receiver),
-			// 	gasPrice: voteTx.gasPrice,
-			// 	gasLimit: voteTx.gasLimit,
-			// 	data: voteTx.data,
-			// 	chainID: voteTx.chainID,
-			// 	version: voteTx.version,
-			// 	relayer: new Address(voteTx.relayer),
-			// 	relayerSignature: Buffer.from(voteTx.relayerSignature, "hex"),
-			// })
+			console.log(voteTx)
 
-			const { sessionId: newSessionId } = await sendTransactions({
+			const { sessionId: newSessionId, error: err } = await sendTransactions({
 				transactions: [voteTx],
 				transactionsDisplayInfo: {
 					processingMessage: 'Submitting vote...',
 					errorMessage: 'Failed to submit vote',
 					successMessage: 'Vote submitted successfully!',
 				},
-				// redirectAfterSign: false,
+				redirectAfterSign: false,
 			});
+
+			if (err) {
+				setVoteError(typeof err === 'string' ? err : (err.message || 'Failed to submit vote'));
+				setIsVoting(false);
+				return;
+			}
 
 			setVoteSessionId(newSessionId);
 		} catch (error) {
 			console.error('Error submitting vote:', error);
-			setVoteError(error instanceof Error ? error.message : 'Failed to submit vote');
+			let errorText = error instanceof Error ? error.message : 'Failed to submit vote';
+			setVoteError(errorText);
 			setIsVoting(false);
 		}
 	};
@@ -310,18 +340,22 @@ export default function CampaignDetailsPage() {
 
 				<div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 					<p className="text-slate-400">{campaign.description}</p>
-					{campaign.status === 'active' && (
+					{(campaign.is_tallied || campaign.status === 'closed') ? (
+						<div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
+							<Clock className="h-4 w-4 text-slate-400" />
+							<span>Ended</span>
+						</div>
+					) : campaign.status === 'active' ? (
 						<div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
 							<Clock className="h-4 w-4 text-purple-400" />
 							<span>Ends in {campaign.endTime}</span>
 						</div>
-					)}
-					{campaign.status === 'upcoming' && (
+					) : campaign.status === 'upcoming' ? (
 						<div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
 							<Clock className="h-4 w-4 text-blue-400" />
 							<span>Starts in {campaign.startTime}</span>
 						</div>
-					)}
+					) : null}
 				</div>
 			</div>
 
@@ -492,6 +526,16 @@ export default function CampaignDetailsPage() {
 										</TooltipContent>
 									</Tooltip>
 								</TooltipProvider>
+							) : !isLoggedIn ? (
+								<div className="flex flex-col items-center justify-center w-full py-4 text-center">
+									<div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-yellow-500/20 mx-auto">
+										<AlertTriangle className="h-6 w-6 text-yellow-400" />
+									</div>
+									<h3 className="text-base font-bold text-white">Connect Your Wallet</h3>
+									<p className="mt-1 text-sm text-slate-400">
+										You must connect your wallet to participate in this vote.
+									</p>
+								</div>
 							) : isEligible() ? (
 								<TooltipProvider>
 									<Tooltip>

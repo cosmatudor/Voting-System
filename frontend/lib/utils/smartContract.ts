@@ -1,9 +1,9 @@
 import { SmartContract, Address, AbiRegistry } from "@multiversx/sdk-core";
-import abi from '@/abis/voting-system.abi.json';
+import abi from '@/abis/blockchain.abi.json';
 
 const abiRegistry = AbiRegistry.create(abi);
 
 export const smartContract = new SmartContract({
-    address: new Address('erd1qqqqqqqqqqqqqpgqjtl4cwve2vfx3cvvswgdhcmvx4zms4jmd4sq69lcx0'),
+    address: new Address('erd1qqqqqqqqqqqqqpgqeu4l9869cnjk7dya8x0tv4spuxcraulzd4sqjdx63j'),
     abi: abiRegistry
 })

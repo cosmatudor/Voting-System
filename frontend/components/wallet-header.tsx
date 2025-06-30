@@ -47,7 +47,7 @@ export function WalletHeader() {
 	};
 
 	const handleLogout = () => {
-		logout();
+		logout(undefined, () => {});
 	};
 
 	return (
@@ -87,9 +87,7 @@ export function WalletHeader() {
 			) : (
 				<ExtensionLoginButton
 					loginButtonText='Connect Wallet'
-					callbackRoute='/'
 					buttonClassName='bg-purple-500 text-white hover:bg-purple-600'
-
 				/>
 			)}
 		</div>
