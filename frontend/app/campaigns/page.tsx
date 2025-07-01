@@ -185,10 +185,10 @@ export default function CampaignsPage() {
 											{(campaign.is_tallied || campaign.status === 'closed')
 												? 'Ended'
 												: campaign.status === 'active'
-													? `Ends in ${campaign.endTime}`
-													: campaign.status === 'upcoming'
-														? `Starts in ${campaign.startTime}`
-														: 'Ended'}
+												? `Ends in ${campaign.endTime}`
+												: campaign.status === 'upcoming'
+												? `Starts in ${campaign.startTime}`
+												: 'Ended'}
 										</span>
 									</div>
 									<div className='flex items-center gap-2'>

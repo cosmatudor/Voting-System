@@ -1,5 +1,5 @@
 // src/relayers/entities/relayer.entity/relayer.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, JoinColumn, ManyToOne } from 'typeorm';
 import { UserEntity } from '../../../users/entities/user.entity/user.entity';
 
 @Entity('relayers')
@@ -13,7 +13,10 @@ export class RelayerEntity {
   @Column()
   encryptedPrivateKey: string;
 
-  @OneToOne(() => UserEntity, user => user.relayer, { onDelete: 'CASCADE' })
+  @Column()
+  shardId: number
+
+  @ManyToOne(() => UserEntity, user => user.relayers, { onDelete: 'CASCADE' })
   @JoinColumn()
   user: UserEntity;
 }

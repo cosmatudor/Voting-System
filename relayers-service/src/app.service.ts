@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { UsersService } from './users/users.service';
 import { RelayersService } from './relayers/relayers.service';
+import { RelayerEntity } from './relayers/entities/relayer.entity/relayer.entity';
 
 @Injectable()
 export class AppService {
@@ -16,32 +17,31 @@ export class AppService {
       user = await this.usersService.createUser(address);
     }
 
-    let relayer = await this.relayersService.getRelayerForUserAddress(address);
-    if (!relayer) {
-      relayer = await this.relayersService.createRelayer(address);
+    let relayers = await this.relayersService.getAllRelayersForCreator(address);
+    if (relayers.length) {
+      return relayers;
     }
 
-    return {
-      user,
-      relayer,
-    };
+    return await this.relayersService.createRelayer(address);
   }
 
   async getFundRelayerTxn(address: string) {
-    const relayer = await this.relayersService.getRelayerForUserAddress(address);
-    if (!relayer) {
+    const relayers = await this.relayersService.getAllRelayersForCreator(address);
+    if (relayers.length == 0) {
       throw new Error('Relayer not found');
     }
 
-     const tx = await this.relayersService.composeFundingTransaction(address, relayer);
-     return { transaction: tx };
+     const txs = await this.relayersService.composeFundingTransaction(address, relayers);
+     return { transactions: txs };
   }
 
   async getRelayerVoteTxn(voterAddress: string, ownerAddress: string, campaignId: number, option: number) {
-    const relayer = await this.relayersService.getRelayerForUserAddress(ownerAddress);
+    const relayer = await this.relayersService.getRelayerForVoter(ownerAddress, voterAddress);
     if (!relayer) {
       throw new Error('Relayer not found');
     }
+
+    console.log("AICICICICICI:", relayer)
 
     const tx = await this.relayersService.composeRelayerVoteTransaction(voterAddress, relayer, campaignId, option);
     return { transaction: tx };

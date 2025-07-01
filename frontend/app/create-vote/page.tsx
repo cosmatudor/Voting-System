@@ -270,8 +270,8 @@ export default function CreateVotePage() {
 			localStorage.setItem('draftVote', JSON.stringify(formData));
 			localStorage.setItem('isFunding', 'true');
 
-			const nativeAuthToken = await getAuthToken()
-			console.log("auth token:", nativeAuthToken)
+			const nativeAuthToken = await getAuthToken();
+			console.log("auth token:", nativeAuthToken);
 
 			const response = await fetch('http://localhost:3001/login', {
 				method: 'POST',
@@ -289,19 +289,23 @@ export default function CreateVotePage() {
 				headers: { Authorization: `Bearer ${nativeAuthToken}` },
 			});
 			if (!fundResponse.ok) throw new Error('Failed to get funding transaction');
-			const { transaction: fundTxn } = await fundResponse.json();
+			const { transactions: fundTxns } = await fundResponse.json();
 
-			const { sessionId: id } = await sendTransactions({
-				transactions: [fundTxn],
+			if (!Array.isArray(fundTxns) || fundTxns.length === 0) {
+				throw new Error('No funding transactions received');
+			}
+
+			const { sessionId } = await sendTransactions({
+				transactions: fundTxns,
 				transactionsDisplayInfo: {
-					processingMessage: 'Funding relayer...',
-					errorMessage: 'Failed to fund relayer',
-					successMessage: 'Relayer funded successfully!',
+					processingMessage: `Funding all relayers...`,
+					errorMessage: 'Failed to fund relayers',
+					successMessage: 'All relayers funded successfully!',
 				},
 				redirectAfterSign: false,
 			});
 
-			setSessionId(id);
+			setSessionId(sessionId);
 		} catch (error) {
 			setCreationError('Funding failed. Please try again.');
 			setIsFunding(false);
