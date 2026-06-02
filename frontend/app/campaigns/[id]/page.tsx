@@ -119,6 +119,372 @@ async function getNonSponsoredVoteTx(
 	return getSimpleVoteTx(campaignId, parseInt(selectedOption) - 1);
 }
 
+function handleVoteOnFail(
+	errorMessage: string | undefined,
+	voteSessionId: string | null,
+	setVoteError: (e: string | null) => void,
+	setIsVoting: (v: boolean) => void
+): void {
+	const errorText = errorMessage || 'Transaction failed. Please try again.';
+	if (voteSessionId && errorMessage && (errorMessage.includes('Insufficient funds') || errorMessage.includes('shard ID missmatch'))) {
+		removeSignedTransaction(voteSessionId);
+	}
+	setVoteError(errorText);
+	setIsVoting(false);
+}
+
+async function executeVote(
+	campaign: { is_sponsored: boolean; creator: { address: string } },
+	campaignId: number,
+	selectedOption: string,
+	getSimpleVoteTx: (campaignId: number, optionIndex: number) => Promise<unknown>,
+	setIsVoting: (v: boolean) => void,
+	setVoteError: (e: string | null) => void,
+	setVoteSessionId: (v: string | null) => void
+): Promise<void> {
+	try {
+		const voteTx = campaign.is_sponsored
+			? await getSponsoredVoteTx(campaign, campaignId, selectedOption)
+			: await getNonSponsoredVoteTx(getSimpleVoteTx, campaignId, selectedOption);
+		const { sessionId: newSessionId } = await sendTransactions({
+			transactions: [voteTx],
+			transactionsDisplayInfo: {
+				processingMessage: 'Submitting vote...',
+				errorMessage: 'Failed to submit vote',
+				successMessage: 'Vote submitted successfully!',
+			},
+		});
+		setVoteSessionId(newSessionId);
+	} catch (error) {
+		console.error('Error submitting vote:', error);
+		setVoteError(error instanceof Error ? error.message : 'Failed to submit vote');
+		setIsVoting(false);
+	}
+}
+
+async function executeTallyVotes(
+	campaignId: number,
+	getCloseCampaignTx: (id: number) => Promise<unknown>,
+	setIsTallying: (v: boolean) => void,
+	setTallyTxSessionId: (v: string | null) => void,
+	setVoteError: (e: string | null) => void,
+	setShowTallyWarning: (v: boolean) => void
+): Promise<void> {
+	setIsTallying(true);
+	try {
+		const tx = await getCloseCampaignTx(Number(campaignId));
+		const { sessionId: newSessionId } = await sendTransactions({
+			transactions: [tx],
+			transactionsDisplayInfo: {
+				processingMessage: 'Closing campaign...',
+				errorMessage: 'Error closing campaign',
+				successMessage: 'Campaign closed successfully',
+			},
+		});
+		setTallyTxSessionId(newSessionId);
+	} catch (error) {
+		console.error('Error tallying votes:', error);
+		setVoteError(error instanceof Error ? error.message : 'Failed to tally votes');
+	} finally {
+		setIsTallying(false);
+		setShowTallyWarning(false);
+	}
+}
+
+function CampaignHeader({ campaign }: {
+	campaign: { title: string; is_tallied: boolean; status: string; description: string; endTime: string; startTime: string };
+}) {
+	return (
+		<div className="mb-8">
+			<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+				<h1 className="text-2xl font-bold sm:text-3xl text-white">{campaign.title}</h1>
+				<Badge
+					className={
+						campaign.is_tallied
+							? 'bg-purple-500/20 text-purple-400'
+							: campaign.status === 'active'
+							? 'bg-green-500/20 text-green-400'
+							: campaign.status === 'upcoming'
+							? 'bg-blue-500/20 text-blue-400'
+							: 'bg-slate-500/20 text-slate-400'
+					}
+				>
+					{campaign.is_tallied ? 'Tallied' : campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
+				</Badge>
+			</div>
+			<div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+				<p className="text-slate-400">{campaign.description}</p>
+				{(campaign.is_tallied || campaign.status === 'closed') ? (
+					<div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
+						<Clock className="h-4 w-4 text-slate-400" /><span>Ended</span>
+					</div>
+				) : campaign.status === 'active' ? (
+					<div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
+						<Clock className="h-4 w-4 text-purple-400" /><span>Ends in {campaign.endTime}</span>
+					</div>
+				) : campaign.status === 'upcoming' ? (
+					<div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
+						<Clock className="h-4 w-4 text-blue-400" /><span>Starts in {campaign.startTime}</span>
+					</div>
+				) : null}
+			</div>
+		</div>
+	);
+}
+
+function VotingCardContent({ campaign, selectedOption, setSelectedOption, isEligible }: {
+	campaign: {
+		status: string; is_tallied: boolean; is_confidential: boolean; startTime: string;
+		options: { id: string; label: string }[]; results?: number[]; totalVotes: number;
+	};
+	selectedOption: string | null;
+	setSelectedOption: (v: string) => void;
+	isEligible: boolean;
+}) {
+	if (campaign.status === 'upcoming') {
+		return (
+			<div className="flex flex-col items-center justify-center py-8 text-center">
+				<div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/20">
+					<Clock className="h-8 w-8 text-blue-400" />
+				</div>
+				<h3 className="text-xl font-bold text-white">Voting Not Yet Open</h3>
+				<p className="mt-2 text-slate-400">This vote will open for participation in {campaign.startTime}.</p>
+				<div className="mt-4 flex items-center justify-center gap-2 rounded-full bg-blue-500/10 px-3 py-1 text-sm text-blue-400">
+					<Info className="h-4 w-4" /><span>You can review the proposal details below</span>
+				</div>
+			</div>
+		);
+	}
+	if (campaign.is_tallied) {
+		return (
+			<div className="space-y-4">
+				{campaign.options.map((option, index) => (
+					<div key={option.id} className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-800/50 p-4">
+						<div className="flex-1">
+							<Label className="text-lg font-medium text-white">{option.label}</Label>
+							<div className="mt-2">
+								<div className="flex items-center justify-between text-sm">
+									<span className="text-slate-400">Votes</span>
+									<span className="font-medium text-white">{campaign.results?.[index] || 0}</span>
+								</div>
+								<div className="mt-1 h-1.5 w-full rounded-full bg-slate-800">
+									<div className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-600"
+										style={{ width: `${((campaign.results?.[index] || 0) / (campaign.totalVotes || 1)) * 100}%` }}
+									></div>
+								</div>
+							</div>
+						</div>
+					</div>
+				))}
+			</div>
+		);
+	}
+	return (
+		<RadioGroup value={selectedOption || ''} onValueChange={setSelectedOption} className="space-y-4">
+			{campaign.options.map((option) => (
+				<div
+					key={option.id}
+					className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all duration-200 ${
+						selectedOption === option.id
+							? 'border-purple-500/50 bg-purple-500/10'
+							: 'border-slate-800 bg-slate-800/50 hover:border-purple-500/30 hover:bg-slate-800'
+					} ${!isEligible ? 'opacity-60 cursor-not-allowed' : ''}`}
+					onClick={() => isEligible && setSelectedOption(option.id)}
+				>
+					<RadioGroupItem value={option.id} id={option.id} className="border-slate-600 text-purple-500" disabled={!isEligible} />
+					<div className="flex-1">
+						<Label htmlFor={option.id} className={`text-lg font-medium cursor-pointer text-white ${!isEligible ? 'cursor-not-allowed' : ''}`}>
+							{option.label}
+						</Label>
+						{(!campaign.is_confidential || campaign.is_tallied) && campaign.results && (
+							<div className="mt-2">
+								<div className="flex items-center justify-between text-sm">
+									<span className="text-slate-400">Votes</span>
+									<span className="font-medium text-white">{campaign.results[parseInt(option.id) - 1] || 0}</span>
+								</div>
+								<div className="mt-1 h-1.5 w-full rounded-full bg-slate-800">
+									<div className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-600"
+										style={{ width: `${((campaign.results[parseInt(option.id) - 1] || 0) / campaign.totalVotes) * 100}%` }}
+									></div>
+								</div>
+							</div>
+						)}
+						{campaign.is_confidential && !campaign.is_tallied && (
+							<div className="mt-2 flex items-center gap-2 text-sm text-slate-400">
+								<Lock className="h-4 w-4 text-purple-400" /><span>Results hidden until voting ends</span>
+							</div>
+						)}
+					</div>
+				</div>
+			))}
+		</RadioGroup>
+	);
+}
+
+function VotingCardFooter({ campaign, isCreator, isLoggedIn, isEligible, isTallying, isVoting, voteTxStatusIsPending, selectedOption, handleVote, onTallyClick }: {
+	campaign: { status: string; is_tallied: boolean };
+	isCreator: boolean; isLoggedIn: boolean; isEligible: boolean;
+	isTallying: boolean; isVoting: boolean; voteTxStatusIsPending: boolean;
+	selectedOption: string | null;
+	handleVote: () => void;
+	onTallyClick: () => void;
+}) {
+	if (campaign.status === 'upcoming') {
+		return <Button variant="outline" className="w-full border-blue-500/30 text-blue-400 hover:bg-blue-500/10" disabled>Voting Not Yet Open</Button>;
+	}
+	if (campaign.is_tallied) {
+		return (
+			<div className="flex flex-col items-center justify-center w-full py-4 text-center">
+				<div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-green-500/20 mx-auto">
+					<Check className="h-6 w-6 text-green-400" />
+				</div>
+				<h3 className="text-base font-bold text-white">Voting Period Ended</h3>
+				<p className="mt-1 text-sm text-slate-400">The voting period has ended and results have been tallied.</p>
+			</div>
+		);
+	}
+	if (isCreator) {
+		return (
+			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<div className="w-full">
+							<Button className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700" disabled={isTallying} onClick={onTallyClick}>
+								{isTallying ? <>Tallying Votes...</> : <>Tally Votes</>}
+							</Button>
+						</div>
+					</TooltipTrigger>
+					<TooltipContent>End voting period and tally results</TooltipContent>
+				</Tooltip>
+			</TooltipProvider>
+		);
+	}
+	if (!isLoggedIn) {
+		return (
+			<div className="flex flex-col items-center justify-center w-full py-4 text-center">
+				<div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-yellow-500/20 mx-auto">
+					<AlertTriangle className="h-6 w-6 text-yellow-400" />
+				</div>
+				<h3 className="text-base font-bold text-white">Connect Your Wallet</h3>
+				<p className="mt-1 text-sm text-slate-400">You must connect your wallet to participate in this vote.</p>
+			</div>
+		);
+	}
+	if (isEligible) {
+		return (
+			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<div className="w-full">
+							<Button className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
+								disabled={!selectedOption || isVoting || voteTxStatusIsPending} onClick={handleVote}>
+								{isVoting || voteTxStatusIsPending ? 'Submitting Vote...' : 'Submit Vote'}
+							</Button>
+						</div>
+					</TooltipTrigger>
+					<TooltipContent>{selectedOption ? 'Submit your vote' : 'Select an option to vote'}</TooltipContent>
+				</Tooltip>
+			</TooltipProvider>
+		);
+	}
+	return (
+		<div className="flex flex-col items-center justify-center w-full py-4 text-center">
+			<div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-yellow-500/20 mx-auto">
+				<AlertTriangle className="h-6 w-6 text-yellow-400" />
+			</div>
+			<h3 className="text-base font-bold text-white">Not Eligible to Vote</h3>
+			<p className="mt-1 text-sm text-slate-400">
+				Your wallet address is not on the eligibility list for this vote. Only wallets that have been added to the eligibility list by the campaign creator can participate.
+			</p>
+		</div>
+	);
+}
+
+function CampaignInfoSidebar({ campaign, isEligible }: {
+	campaign: {
+		is_confidential: boolean; is_sponsored: boolean;
+		participation: number; creator: { address: string }; totalVotes: number;
+	};
+	isEligible: boolean;
+}) {
+	return (
+		<div>
+			<Card className="border-slate-800 bg-slate-900/50 shadow-lg backdrop-blur">
+				<CardHeader>
+					<CardTitle className="text-lg text-white">Vote Information</CardTitle>
+				</CardHeader>
+				<CardContent className="space-y-4">
+					<div className="flex items-center gap-3">
+						<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
+							<Shield className="h-5 w-5" />
+						</div>
+						<div>
+							<h3 className="font-medium text-white">{campaign.is_confidential ? 'Confidential Voting' : 'Public Voting'}</h3>
+							<p className="text-sm text-slate-400">{campaign.is_confidential ? 'Your vote is private' : 'Votes are updating live and visible to everyone'}</p>
+						</div>
+					</div>
+					<div className="flex items-center gap-3">
+						<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
+							<Wallet className="h-5 w-5" />
+						</div>
+						<div>
+							<h3 className="font-medium text-white">Transaction Type</h3>
+							<p className="text-sm text-slate-400">{campaign.is_sponsored ? 'Sponsored by campaign creator' : 'Standard transaction'}</p>
+						</div>
+					</div>
+					<div className="flex items-center gap-3">
+						<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
+							<Users className="h-5 w-5" />
+						</div>
+						<div>
+							<h3 className="font-medium text-white">Participation</h3>
+							<p className="text-sm text-slate-400">{campaign.participation}% of eligible voters</p>
+						</div>
+					</div>
+					<div className="flex items-center gap-3">
+						<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
+							<User className="h-5 w-5" />
+						</div>
+						<div>
+							<h3 className="font-medium text-white">Created By</h3>
+							<p className="text-sm text-slate-400">{campaign.creator.address.slice(0, 14)}...{campaign.creator.address.slice(-10)}</p>
+						</div>
+					</div>
+					<div className="flex items-center gap-3">
+						<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
+							<Wallet className="h-5 w-5" />
+						</div>
+						<div>
+							<h3 className="font-medium text-white">Eligibility</h3>
+							<p className="text-sm text-slate-400">{isEligible ? 'Your wallet is eligible to vote' : 'Your wallet is not eligible'}</p>
+						</div>
+					</div>
+					<div className="flex items-center gap-3">
+						<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
+							<BarChart3 className="h-5 w-5" />
+						</div>
+						<div>
+							<h3 className="font-medium text-white">Total Votes</h3>
+							<p className="text-sm text-slate-400">{campaign.totalVotes} votes cast</p>
+						</div>
+					</div>
+					<Separator className="bg-slate-800" />
+					<div className="rounded-lg border border-slate-800 bg-slate-800/30 p-4">
+						<h3 className="font-medium text-white">How voting works</h3>
+						<p className="mt-2 text-sm text-slate-400">Votes are processed on-chain, ensuring transparency and verifiability of results.</p>
+						<Link href="/how-it-works">
+							<Button variant="link" className="mt-2 h-auto p-0 text-purple-400 hover:text-purple-300">
+								Learn more about our voting system
+								<ExternalLink className="ml-1 h-3 w-3" />
+							</Button>
+						</Link>
+					</div>
+				</CardContent>
+			</Card>
+		</div>
+	);
+}
+
 export default function CampaignDetailsPage() {
 	const params = useParams();
 	const campaignId = Number(params.id);
@@ -146,12 +512,7 @@ export default function CampaignDetailsPage() {
 			setIsVoting(false);
 			setVoteError(null);
 		},
-		onFail: (_, errorMessage) => {
-			let errorText = errorMessage || 'Transaction failed. Please try again.';
-			if (voteSessionId && errorMessage && (errorMessage.includes("Insufficient funds") ||errorMessage.includes("shard ID missmatch"))) removeSignedTransaction(voteSessionId);
-			setVoteError(errorText);
-			setIsVoting(false);
-		},
+		onFail: (_, errorMessage) => handleVoteOnFail(errorMessage, voteSessionId, setVoteError, setIsVoting),
 		onCancelled: () => {
 			setVoteError('Vote transaction was cancelled.');
 			setIsVoting(false);
@@ -189,60 +550,14 @@ export default function CampaignDetailsPage() {
 
 	const handleVote = async () => {
 		const validationError = validateVote(isLoggedIn, selectedOption, campaign, checkEligible(address, campaign));
-		if (validationError) {
-			setVoteError(validationError);
-			return;
-		}
-
+		if (validationError) { setVoteError(validationError); return; }
 		setIsVoting(true);
 		setVoteError(null);
-
-		try {
-			const voteTx = campaign!.is_sponsored
-				? await getSponsoredVoteTx(campaign!, campaignId, selectedOption!)
-				: await getNonSponsoredVoteTx(getSimpleVoteTx, campaignId, selectedOption!);
-
-			const { sessionId: newSessionId } = await sendTransactions({
-				transactions: [voteTx],
-				transactionsDisplayInfo: {
-					processingMessage: 'Submitting vote...',
-					errorMessage: 'Failed to submit vote',
-					successMessage: 'Vote submitted successfully!',
-				},
-			});
-
-			setVoteSessionId(newSessionId);
-		} catch (error) {
-			console.error('Error submitting vote:', error);
-			setVoteError(error instanceof Error ? error.message : 'Failed to submit vote');
-			setIsVoting(false);
-		}
+		await executeVote(campaign!, campaignId, selectedOption!, getSimpleVoteTx, setIsVoting, setVoteError, setVoteSessionId);
 	};
-	// Handle tally votes
 	const handleTallyVotes = async () => {
 		if (!checkIsCreator(address, campaign)) return;
-
-		setIsTallying(true);
-		try {
-			// First close the campaign
-			const tx = await getCloseCampaignTx(Number(campaignId));
-			const { sessionId: newSessionId } =  await sendTransactions({
-				transactions: [tx],
-				transactionsDisplayInfo: {
-					processingMessage: 'Closing campaign...',
-					errorMessage: 'Error closing campaign',
-					successMessage: 'Campaign closed successfully',
-				},
-			});
-
-			setTallyTxSessionId(newSessionId);			
-		} catch (error) {
-			console.error('Error tallying votes:', error);
-			setVoteError(error instanceof Error ? error.message : 'Failed to tally votes');
-		} finally {
-			setIsTallying(false);
-			setShowTallyWarning(false);
-		}
+		await executeTallyVotes(campaignId, getCloseCampaignTx, setIsTallying, setTallyTxSessionId, setVoteError, setShowTallyWarning);
 	};
 
 	if (isLoading) {
@@ -285,49 +600,7 @@ export default function CampaignDetailsPage() {
 				</Link>
 			</div>
 
-			{/* Campaign Header */}
-			<div className="mb-8">
-				<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-					<h1 className="text-2xl font-bold sm:text-3xl text-white">
-						{campaign.title}
-					</h1>
-					<Badge
-						className={
-							campaign.is_tallied
-								? 'bg-purple-500/20 text-purple-400'
-								: campaign.status === 'active'
-								? 'bg-green-500/20 text-green-400'
-								: campaign.status === 'upcoming'
-								? 'bg-blue-500/20 text-blue-400'
-								: 'bg-slate-500/20 text-slate-400'
-						}
-					>
-						{campaign.is_tallied
-							? 'Tallied'
-							: campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
-					</Badge>
-				</div>
-
-				<div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-					<p className="text-slate-400">{campaign.description}</p>
-					{(campaign.is_tallied || campaign.status === 'closed') ? (
-						<div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
-							<Clock className="h-4 w-4 text-slate-400" />
-							<span>Ended</span>
-						</div>
-					) : campaign.status === 'active' ? (
-						<div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
-							<Clock className="h-4 w-4 text-purple-400" />
-							<span>Ends in {campaign.endTime}</span>
-						</div>
-					) : campaign.status === 'upcoming' ? (
-						<div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
-							<Clock className="h-4 w-4 text-blue-400" />
-							<span>Starts in {campaign.startTime}</span>
-						</div>
-					) : null}
-				</div>
-			</div>
+			<CampaignHeader campaign={campaign} />
 
 			<div className="grid gap-8 lg:grid-cols-3">
 				{/* Main Content - Voting Card */}
@@ -345,199 +618,27 @@ export default function CampaignDetailsPage() {
 							)}
 						</CardHeader>
 						<CardContent className="p-6">
-							{campaign.status === 'upcoming' ? (
-								<div className="flex flex-col items-center justify-center py-8 text-center">
-									<div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/20">
-										<Clock className="h-8 w-8 text-blue-400" />
-									</div>
-									<h3 className="text-xl font-bold text-white">Voting Not Yet Open</h3>
-									<p className="mt-2 text-slate-400">
-										This vote will open for participation in {campaign.startTime}.
-									</p>
-									<div className="mt-4 flex items-center justify-center gap-2 rounded-full bg-blue-500/10 px-3 py-1 text-sm text-blue-400">
-										<Info className="h-4 w-4" />
-										<span>You can review the proposal details below</span>
-									</div>
-								</div>
-							) : campaign.is_tallied ? (
-								<div className="space-y-4">
-									{campaign.options.map((option, index) => (
-										<div
-											key={option.id}
-											className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-800/50 p-4"
-										>
-											<div className="flex-1">
-												<Label className="text-lg font-medium text-white">
-													{option.label}
-												</Label>
-												<div className="mt-2">
-													<div className="flex items-center justify-between text-sm">
-														<span className="text-slate-400">Votes</span>
-														<span className="font-medium text-white">
-															{campaign.results?.[index] || 0}
-														</span>
-													</div>
-													<div className="mt-1 h-1.5 w-full rounded-full bg-slate-800">
-														<div
-															className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-600"
-															style={{
-																width: `${((campaign.results?.[index] || 0) / (campaign.totalVotes || 1)) * 100}%`,
-															}}
-														></div>
-													</div>
-												</div>
-											</div>
-										</div>
-									))}
-								</div>
-							) : (
-								<RadioGroup
-									value={selectedOption || ''}
-									onValueChange={setSelectedOption}
-									className="space-y-4"
-								>
-									{campaign.options.map((option) => (
-										<div
-											key={option.id}
-											className={`flex cursor-pointer items-center gap-3 rounded-lg border p-4 transition-all duration-200 ${
-												selectedOption === option.id
-													? 'border-purple-500/50 bg-purple-500/10'
-													: 'border-slate-800 bg-slate-800/50 hover:border-purple-500/30 hover:bg-slate-800'
-											} ${!checkEligible(address, campaign) ? 'opacity-60 cursor-not-allowed' : ''}`}
-											onClick={() => checkEligible(address, campaign) && setSelectedOption(option.id)}
-										>
-											<RadioGroupItem
-												value={option.id}
-												id={option.id}
-												className="border-slate-600 text-purple-500"
-												disabled={!checkEligible(address, campaign)}
-											/>
-											<div className="flex-1">
-												<Label
-													htmlFor={option.id}
-													className={`text-lg font-medium cursor-pointer text-white ${
-														!checkEligible(address, campaign) ? 'cursor-not-allowed' : ''
-													}`}
-												>
-													{option.label}
-												</Label>
-												{/* Only show votes and progress bar if not confidential OR if tallied */}
-												{(!campaign.is_confidential || campaign.is_tallied) && campaign.results && (
-													<div className="mt-2">
-														<div className="flex items-center justify-between text-sm">
-															<span className="text-slate-400">Votes</span>
-															<span className="font-medium text-white">
-																{campaign.results[parseInt(option.id) - 1] || 0}
-															</span>
-														</div>
-														<div className="mt-1 h-1.5 w-full rounded-full bg-slate-800">
-															<div
-																className="h-full rounded-full bg-gradient-to-r from-purple-600 to-blue-600"
-																style={{
-																	width: `${((campaign.results[parseInt(option.id) - 1] || 0) / campaign.totalVotes) * 100}%`,
-																}}
-															></div>
-														</div>
-													</div>
-												)}
-												{/* Show confidential message for confidential campaigns that aren't tallied */}
-												{campaign.is_confidential && !campaign.is_tallied && (
-													<div className="mt-2 flex items-center gap-2 text-sm text-slate-400">
-														<Lock className="h-4 w-4 text-purple-400" />
-														<span>Results hidden until voting ends</span>
-													</div>
-												)}
-											</div>
-										</div>
-									))}
-								</RadioGroup>
-							)}
+							<VotingCardContent
+								campaign={campaign}
+								selectedOption={selectedOption}
+								setSelectedOption={setSelectedOption}
+								isEligible={checkEligible(address, campaign)}
+							/>
 						</CardContent>
 
 						<CardFooter className="border-t border-slate-800 bg-slate-900/80 p-4">
-							{campaign.status === 'upcoming' ? (
-								<Button
-									variant="outline"
-									className="w-full border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
-									disabled
-								>
-									Voting Not Yet Open
-								</Button>
-							) : campaign.is_tallied ? (
-								<div className="flex flex-col items-center justify-center w-full py-4 text-center">
-									<div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-green-500/20 mx-auto">
-										<Check className="h-6 w-6 text-green-400" />
-									</div>
-									<h3 className="text-base font-bold text-white">Voting Period Ended</h3>
-									<p className="mt-1 text-sm text-slate-400">
-										The voting period has ended and results have been tallied.
-									</p>
-								</div>
-							) : checkIsCreator(address, campaign) ? (
-								<TooltipProvider>
-									<Tooltip>
-										<TooltipTrigger asChild>
-											<div className="w-full">
-												<Button
-													className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
-													disabled={isTallying}
-													onClick={() => setShowTallyWarning(true)}
-												>
-													{isTallying ? (
-														<>Tallying Votes...</>
-													) : (
-														<>Tally Votes</>
-													)}
-												</Button>
-											</div>
-										</TooltipTrigger>
-										<TooltipContent>
-											End voting period and tally results
-										</TooltipContent>
-									</Tooltip>
-								</TooltipProvider>
-							) : !isLoggedIn ? (
-								<div className="flex flex-col items-center justify-center w-full py-4 text-center">
-									<div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-yellow-500/20 mx-auto">
-										<AlertTriangle className="h-6 w-6 text-yellow-400" />
-									</div>
-									<h3 className="text-base font-bold text-white">Connect Your Wallet</h3>
-									<p className="mt-1 text-sm text-slate-400">
-										You must connect your wallet to participate in this vote.
-									</p>
-								</div>
-							) : checkEligible(address, campaign) ? (
-								<TooltipProvider>
-									<Tooltip>
-										<TooltipTrigger asChild>
-											<div className="w-full">
-												<Button
-													className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
-													disabled={!selectedOption || isVoting || voteTxStatus.isPending}
-													onClick={handleVote}
-												>
-													{isVoting || voteTxStatus.isPending ? 'Submitting Vote...' : 'Submit Vote'}
-												</Button>
-											</div>
-										</TooltipTrigger>
-										<TooltipContent>
-											{selectedOption
-												? 'Submit your vote'
-												: 'Select an option to vote'}
-										</TooltipContent>
-									</Tooltip>
-								</TooltipProvider>
-							) : (
-								<div className="flex flex-col items-center justify-center w-full py-4 text-center">
-									<div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-yellow-500/20 mx-auto">
-										<AlertTriangle className="h-6 w-6 text-yellow-400" />
-									</div>
-									<h3 className="text-base font-bold text-white">Not Eligible to Vote</h3>
-									<p className="mt-1 text-sm text-slate-400">
-										Your wallet address is not on the eligibility list for this vote. Only wallets that have been added to the eligibility list by the campaign creator can participate.
-									</p>
-								</div>
-							)}
+							<VotingCardFooter
+								campaign={campaign}
+								isCreator={checkIsCreator(address, campaign)}
+								isLoggedIn={isLoggedIn}
+								isEligible={checkEligible(address, campaign)}
+								isTallying={isTallying}
+								isVoting={isVoting}
+								voteTxStatusIsPending={voteTxStatus.isPending ?? false}
+								selectedOption={selectedOption}
+								handleVote={handleVote}
+								onTallyClick={() => setShowTallyWarning(true)}
+							/>
 						</CardFooter>
 					</Card>
 
@@ -606,112 +707,7 @@ export default function CampaignDetailsPage() {
 					</div>
 				</div>
 
-				{/* Sidebar */}
-				<div>
-					{/* Vote Information */}
-					<Card className="border-slate-800 bg-slate-900/50 shadow-lg backdrop-blur">
-						<CardHeader>
-							<CardTitle className="text-lg text-white">Vote Information</CardTitle>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div className="flex items-center gap-3">
-								<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
-									<Shield className="h-5 w-5" />
-								</div>
-								<div>
-									<h3 className="font-medium text-white">
-										{campaign.is_confidential ? 'Confidential Voting' : 'Public Voting'}
-									</h3>
-									<p className="text-sm text-slate-400">
-										{campaign.is_confidential
-											? 'Your vote is private'
-											: 'Votes are updating live and visible to everyone'}
-									</p>
-								</div>
-							</div>
-
-							<div className="flex items-center gap-3">
-								<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
-									<Wallet className="h-5 w-5" />
-								</div>
-								<div>
-									<h3 className="font-medium text-white">Transaction Type</h3>
-									<p className="text-sm text-slate-400">
-										{campaign.is_sponsored 
-											? 'Sponsored by campaign creator'
-											: 'Standard transaction'}
-									</p>
-								</div>
-							</div>
-
-							<div className="flex items-center gap-3">
-								<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
-									<Users className="h-5 w-5" />
-								</div>
-								<div>
-									<h3 className="font-medium text-white">Participation</h3>
-									<p className="text-sm text-slate-400">
-										{campaign.participation}% of eligible voters
-									</p>
-								</div>
-							</div>
-
-							<div className="flex items-center gap-3">
-								<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
-									<User className="h-5 w-5" />
-								</div>
-								<div>
-									<h3 className="font-medium text-white">Created By</h3>
-									<p className="text-sm text-slate-400">
-										{campaign.creator.address.slice(0, 14)}...{campaign.creator.address.slice(-10)}
-									</p>
-								</div>
-							</div>
-
-							<div className="flex items-center gap-3">
-								<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
-									<Wallet className="h-5 w-5" />
-								</div>
-								<div>
-									<h3 className="font-medium text-white">Eligibility</h3>
-									<p className="text-sm text-slate-400">
-										{checkEligible(address, campaign) ? 'Your wallet is eligible to vote' : 'Your wallet is not eligible'}
-									</p>
-								</div>
-							</div>
-
-							<div className="flex items-center gap-3">
-								<div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">
-									<BarChart3 className="h-5 w-5" />
-								</div>
-								<div>
-									<h3 className="font-medium text-white">Total Votes</h3>
-									<p className="text-sm text-slate-400">
-										{campaign.totalVotes} votes cast
-									</p>
-								</div>
-							</div>
-
-							<Separator className="bg-slate-800" />
-
-							<div className="rounded-lg border border-slate-800 bg-slate-800/30 p-4">
-								<h3 className="font-medium text-white">How voting works</h3>
-								<p className="mt-2 text-sm text-slate-400">
-									Votes are processed on-chain, ensuring transparency and verifiability of results.
-								</p>
-								<Link href="/how-it-works">
-									<Button
-										variant="link"
-										className="mt-2 h-auto p-0 text-purple-400 hover:text-purple-300"
-									>
-										Learn more about our voting system
-										<ExternalLink className="ml-1 h-3 w-3" />
-									</Button>
-								</Link>
-							</div>
-						</CardContent>
-					</Card>
-				</div>
+				<CampaignInfoSidebar campaign={campaign} isEligible={checkEligible(address, campaign)} />
 			</div>
 
 			{/* Error Messages */}

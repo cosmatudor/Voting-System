@@ -42,6 +42,125 @@ function checkEligible(campaign: FormattedCampaign, address: string): boolean {
 	return campaign.eligible_voters.includes(address);
 }
 
+function CampaignCard({ campaign, address }: { campaign: FormattedCampaign; address: string }) {
+	return (
+		<Link href={`/campaigns/${campaign.id}`} className='group block'>
+			<Card className='border-slate-800 bg-slate-900/50 shadow-lg backdrop-blur hover:border-purple-500/50 transition-colors'>
+				<CardHeader>
+					<div className='flex items-start justify-between gap-4'>
+					<div>
+						<h3 className='text-lg font-semibold text-white group-hover:text-purple-400'>
+								{campaign.title}
+						</h3>
+						<p className='mt-2 text-sm text-slate-400 line-clamp-2'>
+								{campaign.description}
+						</p>
+					</div>
+					<Badge
+						variant='outline'
+						className={`${
+								campaign.is_tallied
+									? 'bg-purple-500/20 text-purple-400 border-purple-500'
+									: campaign.status === 'active'
+										? 'bg-green-500/20 text-green-400 border-green-500'
+										: campaign.status === 'upcoming'
+											? 'bg-blue-500/20 text-blue-400 border-blue-500'
+											: 'bg-slate-500/20 text-slate-400 border-slate-500'
+						}`}
+					>
+							{campaign.is_tallied
+								? 'Tallied'
+								: campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
+					</Badge>
+					</div>
+				</CardHeader>
+				<CardContent>
+					<div className='flex flex-wrap gap-4 text-sm'>
+						<div className='flex items-center gap-2'>
+							<Clock className='h-4 w-4 text-slate-500' />
+							<span className='text-slate-400'>
+								{(campaign.is_tallied || campaign.status === 'closed')
+									? 'Ended'
+									: campaign.status === 'active'
+									? `Ends in ${campaign.endTime}`
+									: campaign.status === 'upcoming'
+									? `Starts in ${campaign.startTime}`
+									: 'Ended'}
+							</span>
+						</div>
+						<div className='flex items-center gap-2'>
+							<Users className='h-4 w-4 text-slate-500' />
+							<span className='text-slate-400'>
+								{`${campaign.participation}% participation`}
+							</span>
+						</div>
+						<div className='flex items-center gap-2'>
+							<Shield className='h-4 w-4 text-slate-500' />
+							<span className='text-slate-400'>
+								{campaign.is_confidential ? 'Confidential' : 'Public'} vote
+							</span>
+						</div>
+						{campaign.is_sponsored && (
+							<div className='flex items-center gap-2'>
+								<Wallet className='h-4 w-4 text-slate-500' />
+								<span className='text-slate-400'>Sponsored</span>
+							</div>
+						)}
+					</div>
+					{campaign.status !== 'upcoming' && (
+						<div className='mt-2'>
+							<div className='flex items-center justify-between text-sm mb-1'>
+								<span className='text-slate-400'>Participation</span>
+								<span className='font-medium text-white'>{campaign.participation ?? 0}%</span>
+							</div>
+							<div className='h-1.5 w-full rounded-full bg-slate-800'>
+								<div
+									className={`h-full rounded-full ${
+										campaign.status === 'closed'
+											? campaign.result === 'Approved'
+												? 'bg-gradient-to-r from-green-600 to-green-500'
+												: 'bg-gradient-to-r from-red-600 to-red-500'
+											: 'bg-gradient-to-r from-purple-600 to-blue-600'
+									}`}
+									style={{ width: `${campaign.participation}%` }}
+								></div>
+							</div>
+						</div>
+					)}
+				</CardContent>
+				<CardFooter>
+					<div className='flex items-center gap-2 text-sm text-slate-400'>
+					<User className='h-4 w-4' />
+					{address && campaign.creator.address === address ? (
+						<Badge variant='outline' className='bg-purple-500/20 text-purple-400 border-purple-500'>
+							Created by you
+						</Badge>
+					) : (
+						<>
+							<span className='font-mono'>
+								Created by {campaign.creator.address.slice(0, 6)}...{campaign.creator.address.slice(-4)}
+							</span>
+							{Array.isArray(campaign.eligible_voters) && address ? (
+								<Badge
+									variant='outline'
+									className={
+										checkEligible(campaign, address)
+											? 'bg-purple-500/20 text-purple-400 border-purple-500 ml-2'
+											: 'bg-slate-500/20 text-slate-400 border-slate-500 ml-2'
+									}
+								>
+									{checkEligible(campaign, address) ? 'Eligible to vote' : 'Not eligible to vote'}
+								</Badge>
+							) : null}
+						</>
+					)}
+				</div>
+				</CardFooter>
+			</Card>
+		</Link>
+	);
+}
+
 export default function CampaignsPage() {
 	const { campaigns, isLoading, error, refetchAllCampaigns } = useGetAllCampaigns();
 	const [searchQuery, setSearchQuery] = useState('');
@@ -143,133 +262,7 @@ export default function CampaignsPage() {
 			{/* Campaign Cards */}
 			<div className='grid gap-6 sm:grid-cols-2 lg:grid-cols-3'>
 				{filteredCampaigns.map((campaign) => (
-					<Link
-						key={campaign.id}
-						href={`/campaigns/${campaign.id}`}
-						className='group block'
-					>
-						<Card className='border-slate-800 bg-slate-900/50 shadow-lg backdrop-blur hover:border-purple-500/50 transition-colors'>
-							<CardHeader>
-								<div className='flex items-start justify-between gap-4'>
-								<div>
-									<h3 className='text-lg font-semibold text-white group-hover:text-purple-400'>
-											{campaign.title}
-									</h3>
-									<p className='mt-2 text-sm text-slate-400 line-clamp-2'>
-											{campaign.description}
-									</p>
-								</div>
-								<Badge
-									variant='outline'
-									className={`${
-											campaign.is_tallied
-												? 'bg-purple-500/20 text-purple-400 border-purple-500'
-												: campaign.status === 'active'
-													? 'bg-green-500/20 text-green-400 border-green-500'
-													: campaign.status === 'upcoming'
-														? 'bg-blue-500/20 text-blue-400 border-blue-500'
-														: 'bg-slate-500/20 text-slate-400 border-slate-500'
-									}`}
-								>
-										{campaign.is_tallied
-											? 'Tallied'
-											: campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
-								</Badge>
-								</div>
-							</CardHeader>
-							<CardContent>
-								<div className='flex flex-wrap gap-4 text-sm'>
-									<div className='flex items-center gap-2'>
-										<Clock className='h-4 w-4 text-slate-500' />
-										<span className='text-slate-400'>
-											{(campaign.is_tallied || campaign.status === 'closed')
-												? 'Ended'
-												: campaign.status === 'active'
-												? `Ends in ${campaign.endTime}`
-												: campaign.status === 'upcoming'
-												? `Starts in ${campaign.startTime}`
-												: 'Ended'}
-										</span>
-									</div>
-									<div className='flex items-center gap-2'>
-										<Users className='h-4 w-4 text-slate-500' />
-										<span className='text-slate-400'>
-											{`${campaign.participation}% participation`}
-										</span>
-									</div>
-									<div className='flex items-center gap-2'>
-										<Shield className='h-4 w-4 text-slate-500' />
-										<span className='text-slate-400'>
-											{campaign.is_confidential ? 'Confidential' : 'Public'} vote
-										</span>
-									</div>
-									{campaign.is_sponsored && (
-										<div className='flex items-center gap-2'>
-											<Wallet className='h-4 w-4 text-slate-500' />
-											<span className='text-slate-400'>
-												Sponsored
-											</span>
-										</div>
-									)}
-								</div>
-
-								{/* Only show participation bar if campaign is not upcoming */}
-								{campaign.status !== 'upcoming' && (
-									<div className='mt-2'>
-										<div className='flex items-center justify-between text-sm mb-1'>
-											<span className='text-slate-400'>Participation</span>
-											<span className='font-medium text-white'>
-												{campaign.participation ?? 0}%
-											</span>
-										</div>
-										<div className='h-1.5 w-full rounded-full bg-slate-800'>
-											<div
-												className={`h-full rounded-full ${
-													campaign.status === 'closed'
-														? campaign.result === 'Approved'
-															? 'bg-gradient-to-r from-green-600 to-green-500'
-															: 'bg-gradient-to-r from-red-600 to-red-500'
-														: 'bg-gradient-to-r from-purple-600 to-blue-600'
-												}`}
-												style={{ width: `${campaign.participation}%` }}
-											></div>
-										</div>
-									</div>
-								)}
-							</CardContent>
-							<CardFooter>
-								<div className='flex items-center gap-2 text-sm text-slate-400'>
-								<User className='h-4 w-4' />
-								{address && campaign.creator.address === address ? (
-									<Badge variant='outline' className='bg-purple-500/20 text-purple-400 border-purple-500'>
-										Created by you
-									</Badge>
-								) : (
-									<>
-										<span className='font-mono'>
-											Created by {campaign.creator.address.slice(0, 6)}...{campaign.creator.address.slice(-4)}
-										</span>
-										{/* Eligibility badge inline with creator */}
-										{Array.isArray(campaign.eligible_voters) && address ? (
-											<Badge
-												variant='outline'
-												className={
-													checkEligible(campaign, address)
-														? 'bg-purple-500/20 text-purple-400 border-purple-500 ml-2'
-														: 'bg-slate-500/20 text-slate-400 border-slate-500 ml-2'
-												}
-											>
-												{checkEligible(campaign, address)
-													? 'Eligible to vote'
-													: 'Not eligible to vote'}
-											</Badge>
-										) : null}
-									</>
-								)}
-							</div>
-							</CardFooter>
-						</Card>
-					</Link>
+					<CampaignCard key={campaign.id} campaign={campaign} address={address} />
 				))}
 			</div>
 		</>

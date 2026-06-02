@@ -146,6 +146,52 @@ function getFundingButtonText(isPending: boolean, isFunding: boolean): string {
 	return 'Fund Relayer';
 }
 
+type TxUpdaters = {
+	setFundingConfirmed: (v: boolean) => void;
+	setIsFunding: (v: boolean) => void;
+	setFormData: (v: typeof defaultFormData) => void;
+	setCreationError: (v: string | null) => void;
+	setIsCreating: (v: boolean) => void;
+	routerPush: (url: string) => void;
+};
+
+function onTxSuccess(isSponsored: boolean, fundingConfirmed: boolean, u: TxUpdaters): void {
+	if (isSponsored && !fundingConfirmed) {
+		u.setFundingConfirmed(true);
+		u.setIsFunding(false);
+		toast.success('Relayer funded successfully! You can now create your campaign.');
+	} else {
+		u.setFormData(defaultFormData);
+		u.setFundingConfirmed(false);
+		localStorage.removeItem('draftVote');
+		u.routerPush('/campaigns');
+	}
+}
+
+function onTxFail(errorMessage: string | null | undefined, isSponsored: boolean, fundingConfirmed: boolean, u: TxUpdaters): void {
+	if (isSponsored && !fundingConfirmed) {
+		u.setCreationError(errorMessage || 'Funding failed. Please try again.');
+		u.setIsFunding(false);
+	} else {
+		u.setCreationError(errorMessage || 'Transaction failed. Please try again.');
+		u.setIsCreating(false);
+		u.setFormData(defaultFormData);
+		localStorage.removeItem('draftVote');
+	}
+}
+
+function onTxCancelled(isSponsored: boolean, fundingConfirmed: boolean, u: TxUpdaters): void {
+	if (isSponsored && !fundingConfirmed) {
+		u.setCreationError('Funding was cancelled. Please try again.');
+		u.setIsFunding(false);
+	} else {
+		u.setCreationError('Transaction was cancelled. Please try again.');
+		u.setIsCreating(false);
+		u.setFormData(defaultFormData);
+		localStorage.removeItem('draftVote');
+	}
+}
+
 // Default form data
 const defaultFormData = {
 	question: '',
@@ -182,43 +228,15 @@ export default function CreateVotePage() {
 	// Get transaction functions
 	const { getCreateCampaignTx } = useCreateCampaignTx();
 
+	const txUpdaters: TxUpdaters = {
+		setFundingConfirmed, setIsFunding, setFormData,
+		setCreationError, setIsCreating, routerPush: router.push,
+	};
 	const transactionStatus = useTrackTransactionStatus({
 		transactionId: sessionId,
-		onSuccess: () => {
-			if (formData.is_sponsored && !fundingConfirmed) {
-				setFundingConfirmed(true);
-				setIsFunding(false);
-				toast.success('Relayer funded successfully! You can now create your campaign.');
-			} else {
-				setFormData(defaultFormData);
-				setFundingConfirmed(false);
-				localStorage.removeItem('draftVote');
-				router.push('/campaigns');
-			}
-		},
-		onFail: (errorMessage) => {
-			if (formData.is_sponsored && !fundingConfirmed) {
-				setCreationError(errorMessage || 'Funding failed. Please try again.');
-				setIsFunding(false);
-			} else {
-				setCreationError(errorMessage || 'Transaction failed. Please try again.');
-				setIsCreating(false);
-				setFormData(defaultFormData);
-				localStorage.removeItem('draftVote');
-			}
-		},
-		onCancelled: () => {
-			if (formData.is_sponsored && !fundingConfirmed) {
-				setCreationError('Funding was cancelled. Please try again.');
-				setIsFunding(false);
-			} else {
-				setCreationError('Transaction was cancelled. Please try again.');
-				setIsCreating(false);
-				setFormData(defaultFormData);
-				localStorage.removeItem('draftVote');
-				// Optionally: router.push('/campaigns');
-			}
-		}
+		onSuccess: () => onTxSuccess(formData.is_sponsored, fundingConfirmed, txUpdaters),
+		onFail: (errorMessage) => onTxFail(errorMessage, formData.is_sponsored, fundingConfirmed, txUpdaters),
+		onCancelled: () => onTxCancelled(formData.is_sponsored, fundingConfirmed, txUpdaters),
 	});
 
 	// Load any saved draft from local storage
@@ -360,8 +378,8 @@ export default function CreateVotePage() {
 				setIsCreating(false);
 				return;
 			}
-			const startTimestamp = Math.floor(formData.startDate.getTime() / 1000);
-			const endTimestamp = Math.floor(formData.endDate.getTime() / 1000);
+			const startTimestamp = Math.floor(formData.startDate!.getTime() / 1000);
+			const endTimestamp = Math.floor(formData.endDate!.getTime() / 1000);
 			const options = formData.options.map(option => option.label);
 			if (formData.is_sponsored && !fundingConfirmed) {
 				setCreationError('Please fund your relayer before creating the campaign.');
@@ -890,7 +908,7 @@ export default function CreateVotePage() {
 													onClick={handleShowFundingInfo}
 													disabled={isFunding || !isStep2Valid}
 												>
-													{getFundingButtonText(transactionStatus.isPending, isFunding)}
+													{getFundingButtonText(transactionStatus.isPending ?? false, isFunding)}
 												</Button>
 											) : (
 												<Button
@@ -898,7 +916,7 @@ export default function CreateVotePage() {
 													onClick={handleCreateCampaign}
 													disabled={isCreating || transactionStatus.isPending || !isStep2Valid}
 												>
-													{getButtonText(transactionStatus.isPending, isCreating)}
+													{getButtonText(transactionStatus.isPending ?? false, isCreating)}
 												</Button>
 											)
 										) : (
@@ -907,7 +925,7 @@ export default function CreateVotePage() {
 												onClick={handleCreateCampaign}
 												disabled={isCreating || transactionStatus.isPending || !isStep2Valid}
 											>
-												{getButtonText(transactionStatus.isPending, isCreating)}
+												{getButtonText(transactionStatus.isPending ?? false, isCreating)}
 											</Button>
 										)}
 									</div>
