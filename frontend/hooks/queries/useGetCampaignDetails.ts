@@ -65,7 +65,7 @@ export const useGetCampaignDetails = (campaignId: number) => {
             const controller = entrypoint.createSmartContractController(registry);
 
             const response = await controller.query({
-                contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqeu4l9869cnjk7dya8x0tv4spuxcraulzd4sqjdx63j"),
+                contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqz6slcp2ugvuqcegz9ram7a9jzervz908d4sq9z7h32"),
                 function: "getCampaignById",
                 arguments: [campaignId],
             });
@@ -91,7 +91,7 @@ export const useGetCampaignDetails = (campaignId: number) => {
             let totalVotes = 0;
             if (campaignDetails.is_tallied) {
                 const response2 = await controller.query({
-                    contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqeu4l9869cnjk7dya8x0tv4spuxcraulzd4sqjdx63j"),
+                    contract: Address.newFromBech32("erd1qqqqqqqqqqqqqpgqz6slcp2ugvuqcegz9ram7a9jzervz908d4sq9z7h32"),
                     function: "getTalliedVotes",
                     arguments: [campaignId],
                 });

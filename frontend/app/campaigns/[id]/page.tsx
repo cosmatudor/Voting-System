@@ -62,12 +62,8 @@ import {
 	DialogTitle,
 } from '@/components/ui/dialog';
 import { useCloseCampaignTx } from '@/hooks/transactions/useCloseCampaignTx';
-import { ExtensionProvider } from "@multiversx/sdk-extension-provider";
-import { NativeAuthClient } from "@multiversx/sdk-native-auth-client";
-import {
-	getAccount,
-  } from "@multiversx/sdk-dapp/utils/account";
 
+const RELAYER_TOKEN = process.env.NEXT_PUBLIC_RELAYER_TOKEN;
 
 export default function CampaignDetailsPage() {
 	const params = useParams();
@@ -151,45 +147,44 @@ export default function CampaignDetailsPage() {
 		return address === campaign.creator.address;
 	};
 
-	const provider = ExtensionProvider.getInstance();
-	const nativeAuthClient = new NativeAuthClient({
-		origin: "https://utils.multiversx.com",
-		expirySeconds: 7200,
-		apiUrl: "https://devnet-api.multiversx.com"
-	});
-
-	const getAuthToken = async () => {
-		await provider.init();
-		const nativeAuthInitialPart = await nativeAuthClient.initialize();
-		await provider.login({ token: nativeAuthInitialPart });
-
-		const account = provider.getAccount()
-
-		if (!account || !account.address || !account.signature) {
-			throw new Error("Extension account or credentials not available");
-		  }
-		
-		const address = account.address;
-		const signature = account.signature;
-		return nativeAuthClient.getToken(address, nativeAuthInitialPart, signature)
-	}
 
 	// Handle vote submission
+	const validateVote = (): string | null => {
+		if (!isLoggedIn) return 'Please connect your wallet first';
+		if (!selectedOption) return 'Please select an option to vote';
+		if (campaign?.status !== 'active') return 'This campaign is not active for voting';
+		if (!isEligible()) return 'Your wallet is not eligible to vote in this campaign';
+		return null;
+	};
+
+	const getSponsoredVoteTx = async (): Promise<unknown> => {
+		const response = await fetch('http://localhost:3001/relayer-vote-transaction', {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${RELAYER_TOKEN}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				ownerAddress: campaign!.creator.address,
+				campaignId,
+				option: parseInt(selectedOption!) - 1,
+			}),
+		});
+
+		if (!response.ok) throw new Error('Failed to get relayer vote transaction');
+
+		const { transaction } = await response.json();
+		return transaction;
+	};
+
+	const getNonSponsoredVoteTx = async (): Promise<unknown> => {
+		return getSimpleVoteTx(campaignId, parseInt(selectedOption!) - 1);
+	};
+
 	const handleVote = async () => {
-		if (!isLoggedIn) {
-			setVoteError('Please connect your wallet first');
-			return;
-		}
-		if (!selectedOption) {
-			setVoteError('Please select an option to vote');
-			return;
-		}
-		if (campaign?.status !== 'active') {
-			setVoteError('This campaign is not active for voting');
-			return;
-		}
-		if (!isEligible()) {
-			setVoteError('Your wallet is not eligible to vote in this campaign');
+		const validationError = validateVote();
+		if (validationError) {
+			setVoteError(validationError);
 			return;
 		}
 
@@ -197,54 +192,23 @@ export default function CampaignDetailsPage() {
 		setVoteError(null);
 
 		try {
-			let voteTx;
-			if (campaign.is_sponsored) {
-				const nativeAuthToken = await getAuthToken()
-				const response = await fetch('http://localhost:3001/relayer-vote-transaction', {
-					method: 'POST',
-					headers: { 
-						'Authorization': `Bearer ${nativeAuthToken}`,
-						'Content-Type': 'application/json' 
-					},
-					body: JSON.stringify({
-						ownerAddress: campaign.creator.address,
-						campaignId: campaignId,
-						option: parseInt(selectedOption) - 1,
-					}),
-				});
-				if (!response.ok) throw new Error('Failed to get relayer vote transaction');
-				const { transaction } = await response.json();
-				voteTx = transaction;
-				console.log('sponsored')
-			} else {
-				const optionIndex = parseInt(selectedOption) - 1;
-				voteTx = await getSimpleVoteTx(campaignId, optionIndex);
-				console.log('not sponsored')
-			}
+			const voteTx = campaign!.is_sponsored
+				? await getSponsoredVoteTx()
+				: await getNonSponsoredVoteTx();
 
-			console.log(voteTx)
-
-			const { sessionId: newSessionId, error: err } = await sendTransactions({
+			const { sessionId: newSessionId } = await sendTransactions({
 				transactions: [voteTx],
 				transactionsDisplayInfo: {
 					processingMessage: 'Submitting vote...',
 					errorMessage: 'Failed to submit vote',
 					successMessage: 'Vote submitted successfully!',
 				},
-				redirectAfterSign: false,
 			});
-
-			if (err) {
-				setVoteError(typeof err === 'string' ? err : (err.message || 'Failed to submit vote'));
-				setIsVoting(false);
-				return;
-			}
 
 			setVoteSessionId(newSessionId);
 		} catch (error) {
 			console.error('Error submitting vote:', error);
-			let errorText = error instanceof Error ? error.message : 'Failed to submit vote';
-			setVoteError(errorText);
+			setVoteError(error instanceof Error ? error.message : 'Failed to submit vote');
 			setIsVoting(false);
 		}
 	};
