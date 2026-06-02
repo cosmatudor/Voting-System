@@ -65,6 +65,60 @@ import { useCloseCampaignTx } from '@/hooks/transactions/useCloseCampaignTx';
 
 const RELAYER_TOKEN = process.env.NEXT_PUBLIC_RELAYER_TOKEN;
 
+function checkEligible(address: string, campaign: { eligible_voters: string[] } | null): boolean {
+	if (!address || !campaign) return false;
+	if (!campaign.eligible_voters) return false;
+	return campaign.eligible_voters.includes(address);
+}
+
+function checkIsCreator(address: string, campaign: { creator: { address: string } } | null): boolean {
+	if (!address || !campaign) return false;
+	return address === campaign.creator.address;
+}
+
+function validateVote(
+	isLoggedIn: boolean,
+	selectedOption: string | null,
+	campaign: { status: string } | null,
+	eligible: boolean
+): string | null {
+	if (!isLoggedIn) return 'Please connect your wallet first';
+	if (!selectedOption) return 'Please select an option to vote';
+	if (campaign?.status !== 'active') return 'This campaign is not active for voting';
+	if (!eligible) return 'Your wallet is not eligible to vote in this campaign';
+	return null;
+}
+
+async function getSponsoredVoteTx(
+	campaign: { creator: { address: string } },
+	campaignId: number,
+	selectedOption: string
+): Promise<unknown> {
+	const response = await fetch('http://localhost:3001/relayer-vote-transaction', {
+		method: 'POST',
+		headers: {
+			'Authorization': `Bearer ${RELAYER_TOKEN}`,
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({
+			ownerAddress: campaign.creator.address,
+			campaignId,
+			option: parseInt(selectedOption) - 1,
+		}),
+	});
+	if (!response.ok) throw new Error('Failed to get relayer vote transaction');
+	const { transaction } = await response.json();
+	return transaction;
+}
+
+async function getNonSponsoredVoteTx(
+	getSimpleVoteTx: (campaignId: number, optionIndex: number) => Promise<unknown>,
+	campaignId: number,
+	selectedOption: string
+): Promise<unknown> {
+	return getSimpleVoteTx(campaignId, parseInt(selectedOption) - 1);
+}
+
 export default function CampaignDetailsPage() {
 	const params = useParams();
 	const campaignId = Number(params.id);
@@ -74,7 +128,6 @@ export default function CampaignDetailsPage() {
 	const [isEligibilityOpen, setIsEligibilityOpen] = useState(false);
 	const [showTallyWarning, setShowTallyWarning] = useState(false);
 	const [isTallying, setIsTallying] = useState(false);
-	const [voteResults, setVoteResults] = useState<number[]>([]);
 	const [voteSessionId, setVoteSessionId] = useState<string | null>(null);
 	const [tallyTxSessionId, setTallyTxSessionId] = useState<string | null>(null);
 
@@ -82,7 +135,7 @@ export default function CampaignDetailsPage() {
 	const { address } = useGetAccount();
 	const { campaign, isLoading, error, refetch } = useGetCampaignDetails(campaignId);
 	const { getSimpleVoteTx } = useSimpleVoteTx();
-	const { getTalliedVotes, tallyResults } = useGetTalliedVotes();
+	const { getTalliedVotes } = useGetTalliedVotes();
 	const { getCloseCampaignTx } = useCloseCampaignTx();
 
 	// Get vote transaction status
@@ -105,7 +158,7 @@ export default function CampaignDetailsPage() {
 		}
 	});
 
-	const tallyTxStatus = useTrackTransactionStatus({
+	useTrackTransactionStatus({
 		transactionId: tallyTxSessionId,
 		onSuccess: async () => {
 			await getTalliedVotes(BigInt(campaignId));
@@ -134,55 +187,8 @@ export default function CampaignDetailsPage() {
 		setVoteError(null)
 	}, [refetch]);
 
-	// Check if user is eligible to vote
-	const isEligible = () => {
-		if (!address || !campaign) return false;
-		if (!campaign.eligible_voters) return false;
-		return campaign.eligible_voters.includes(address);
-	};
-
-	// Check if user is campaign creator
-	const isCreator = () => {
-		if (!address || !campaign) return false;
-		return address === campaign.creator.address;
-	};
-
-
-	// Handle vote submission
-	const validateVote = (): string | null => {
-		if (!isLoggedIn) return 'Please connect your wallet first';
-		if (!selectedOption) return 'Please select an option to vote';
-		if (campaign?.status !== 'active') return 'This campaign is not active for voting';
-		if (!isEligible()) return 'Your wallet is not eligible to vote in this campaign';
-		return null;
-	};
-
-	const getSponsoredVoteTx = async (): Promise<unknown> => {
-		const response = await fetch('http://localhost:3001/relayer-vote-transaction', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${RELAYER_TOKEN}`,
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				ownerAddress: campaign!.creator.address,
-				campaignId,
-				option: parseInt(selectedOption!) - 1,
-			}),
-		});
-
-		if (!response.ok) throw new Error('Failed to get relayer vote transaction');
-
-		const { transaction } = await response.json();
-		return transaction;
-	};
-
-	const getNonSponsoredVoteTx = async (): Promise<unknown> => {
-		return getSimpleVoteTx(campaignId, parseInt(selectedOption!) - 1);
-	};
-
 	const handleVote = async () => {
-		const validationError = validateVote();
+		const validationError = validateVote(isLoggedIn, selectedOption, campaign, checkEligible(address, campaign));
 		if (validationError) {
 			setVoteError(validationError);
 			return;
@@ -193,8 +199,8 @@ export default function CampaignDetailsPage() {
 
 		try {
 			const voteTx = campaign!.is_sponsored
-				? await getSponsoredVoteTx()
-				: await getNonSponsoredVoteTx();
+				? await getSponsoredVoteTx(campaign!, campaignId, selectedOption!)
+				: await getNonSponsoredVoteTx(getSimpleVoteTx, campaignId, selectedOption!);
 
 			const { sessionId: newSessionId } = await sendTransactions({
 				transactions: [voteTx],
@@ -214,7 +220,7 @@ export default function CampaignDetailsPage() {
 	};
 	// Handle tally votes
 	const handleTallyVotes = async () => {
-		if (!isCreator()) return;
+		if (!checkIsCreator(address, campaign)) return;
 
 		setIsTallying(true);
 		try {
@@ -397,20 +403,20 @@ export default function CampaignDetailsPage() {
 												selectedOption === option.id
 													? 'border-purple-500/50 bg-purple-500/10'
 													: 'border-slate-800 bg-slate-800/50 hover:border-purple-500/30 hover:bg-slate-800'
-											} ${!isEligible() ? 'opacity-60 cursor-not-allowed' : ''}`}
-											onClick={() => isEligible() && setSelectedOption(option.id)}
+											} ${!checkEligible(address, campaign) ? 'opacity-60 cursor-not-allowed' : ''}`}
+											onClick={() => checkEligible(address, campaign) && setSelectedOption(option.id)}
 										>
 											<RadioGroupItem
 												value={option.id}
 												id={option.id}
 												className="border-slate-600 text-purple-500"
-												disabled={!isEligible()}
+												disabled={!checkEligible(address, campaign)}
 											/>
 											<div className="flex-1">
 												<Label
 													htmlFor={option.id}
 													className={`text-lg font-medium cursor-pointer text-white ${
-														!isEligible() ? 'cursor-not-allowed' : ''
+														!checkEligible(address, campaign) ? 'cursor-not-allowed' : ''
 													}`}
 												>
 													{option.label}
@@ -467,7 +473,7 @@ export default function CampaignDetailsPage() {
 										The voting period has ended and results have been tallied.
 									</p>
 								</div>
-							) : isCreator() ? (
+							) : checkIsCreator(address, campaign) ? (
 								<TooltipProvider>
 									<Tooltip>
 										<TooltipTrigger asChild>
@@ -500,7 +506,7 @@ export default function CampaignDetailsPage() {
 										You must connect your wallet to participate in this vote.
 									</p>
 								</div>
-							) : isEligible() ? (
+							) : checkEligible(address, campaign) ? (
 								<TooltipProvider>
 									<Tooltip>
 										<TooltipTrigger asChild>
@@ -669,7 +675,7 @@ export default function CampaignDetailsPage() {
 								<div>
 									<h3 className="font-medium text-white">Eligibility</h3>
 									<p className="text-sm text-slate-400">
-										{isEligible() ? 'Your wallet is eligible to vote' : 'Your wallet is not eligible'}
+										{checkEligible(address, campaign) ? 'Your wallet is eligible to vote' : 'Your wallet is not eligible'}
 									</p>
 								</div>
 							</div>

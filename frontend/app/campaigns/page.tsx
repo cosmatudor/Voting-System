@@ -22,6 +22,26 @@ import { Input } from '@/components/ui/input';
 import { useGetAccountInfo } from "@multiversx/sdk-dapp/hooks";
 import { useGetAllCampaigns, FormattedCampaign } from '@/hooks/queries/useGetAllCampaigns';
 
+function matchesStatusFilter(campaign: FormattedCampaign, selectedStatus: string): boolean {
+	if (selectedStatus === 'all') return true;
+	if (selectedStatus === 'closed') return campaign.status === 'closed' || campaign.is_tallied;
+	return campaign.status === selectedStatus && !campaign.is_tallied;
+}
+
+function filterCampaigns(campaigns: FormattedCampaign[], searchQuery: string, selectedStatus: string): FormattedCampaign[] {
+	return campaigns.filter((campaign) => {
+		const matchesSearch =
+			campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+			campaign.description.toLowerCase().includes(searchQuery.toLowerCase());
+		return matchesSearch && matchesStatusFilter(campaign, selectedStatus);
+	});
+}
+
+function checkEligible(campaign: FormattedCampaign, address: string): boolean {
+	if (!address || !campaign.eligible_voters) return false;
+	return campaign.eligible_voters.includes(address);
+}
+
 export default function CampaignsPage() {
 	const { campaigns, isLoading, error, refetchAllCampaigns } = useGetAllCampaigns();
 	const [searchQuery, setSearchQuery] = useState('');
@@ -33,27 +53,7 @@ export default function CampaignsPage() {
 		refetchAllCampaigns();
 	}, []);
 
-	// Filter campaigns based on search query and status
-	const filteredCampaigns = campaigns.filter((campaign: FormattedCampaign) => {
-		const matchesSearch =
-			campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			campaign.description.toLowerCase().includes(searchQuery.toLowerCase());
-		
-		let matchesStatus = false;
-		if (selectedStatus === 'all') matchesStatus = true;
-		else if (selectedStatus === 'closed') matchesStatus = campaign.status === 'closed' || campaign.is_tallied;
-		else matchesStatus = campaign.status === selectedStatus && !campaign.is_tallied;
-		
-		return matchesSearch && matchesStatus;
-	});
-
-	// Check if user is eligible to vote
-	const isEligible = (campaign: FormattedCampaign) => {
-		if (!address || !campaign.eligible_voters) return false;
-		console.log("eligible_voters", campaign.eligible_voters)
-		console.log("address", address)
-		return campaign.eligible_voters.includes(address);
-	};
+	const filteredCampaigns = filterCampaigns(campaigns, searchQuery, selectedStatus);
 
 	if (isLoading) {
 		return (
@@ -254,12 +254,12 @@ export default function CampaignsPage() {
 											<Badge
 												variant='outline'
 												className={
-													isEligible(campaign)
+													checkEligible(campaign, address)
 														? 'bg-purple-500/20 text-purple-400 border-purple-500 ml-2'
 														: 'bg-slate-500/20 text-slate-400 border-slate-500 ml-2'
 												}
 											>
-												{isEligible(campaign)
+												{checkEligible(campaign, address)
 													? 'Eligible to vote'
 													: 'Not eligible to vote'}
 											</Badge>

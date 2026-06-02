@@ -45,6 +45,21 @@ export interface CampaignDetails {
     is_sponsored: boolean;
 }
 
+function calculateParticipation(votes: number, eligibleVoters: number): number {
+    if (!eligibleVoters || eligibleVoters === 0) return 0;
+    return Math.round((votes / eligibleVoters) * 100);
+}
+
+function computeLiveResults(votes: number[], optionsNum: number): number[] {
+    const results = Array(optionsNum).fill(0);
+    for (const vote of votes) {
+        if (typeof vote === 'number' && vote >= 0 && vote < optionsNum) {
+            results[vote]++;
+        }
+    }
+    return results;
+}
+
 export const useGetCampaignDetails = (campaignId: number) => {
     const [campaign, setCampaign] = useState<FormattedCampaignDetails | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -99,13 +114,7 @@ export const useGetCampaignDetails = (campaignId: number) => {
                 results = tallyData ? tallyData.map((count: bigint) => Number(count)) : [];
                 totalVotes = results.reduce((sum: number, count: number) => sum + count, 0);
             } else {
-                const optionsNum = campaignDetails.options.length;
-                results = Array(optionsNum).fill(0);
-                for (const vote of campaignDetails.votes) {
-                    if (typeof vote === 'number' && vote >= 0 && vote < optionsNum) {
-                        results[vote]++;
-                    }
-                }
+                results = computeLiveResults(campaignDetails.votes, campaignDetails.options.length);
                 totalVotes = results.reduce((sum, count) => sum + count, 0);
             }
 
@@ -114,11 +123,6 @@ export const useGetCampaignDetails = (campaignId: number) => {
                 id: (index + 1).toString(),
                 label: Buffer.from(option.valueOf(), 'hex').toString()
             }));
-
-            const calculateParticipation = (votes: number, eligibleVoters: number): number => {
-                if (!eligibleVoters || eligibleVoters === 0) return 0;
-                return Math.round((votes / eligibleVoters) * 100);
-            };
 
             const formattedCampaign: FormattedCampaignDetails = {
                 id: campaignId.toString(),

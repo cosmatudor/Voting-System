@@ -59,6 +59,93 @@ import { ExtensionProvider } from "@multiversx/sdk-extension-provider";
 import { useCreateCampaignTx } from "@/hooks/transactions/useCreateCampaignTx";
 
 
+const provider = ExtensionProvider.getInstance();
+const nativeAuthClient = new NativeAuthClient({
+	origin: "https://utils.multiversx.com",
+	expirySeconds: 7200,
+	apiUrl: "https://devnet-api.multiversx.com"
+});
+
+async function getAuthToken(): Promise<string> {
+	await provider.init();
+	const nativeAuthInitialPart = await nativeAuthClient.initialize();
+	await provider.login({ token: nativeAuthInitialPart });
+	const account = provider.getAccount();
+	if (!account || !account.address || !account.signature) {
+		throw new Error("Extension account or credentials not available");
+	}
+	return nativeAuthClient.getToken(account.address, nativeAuthInitialPart, account.signature);
+}
+
+function isFormValid(formData: typeof defaultFormData): boolean {
+	return !!(
+		formData.question &&
+		formData.description &&
+		formData.startDate &&
+		formData.endDate &&
+		formData.options.length >= 2 &&
+		formData.options.every((option) => option.label)
+	);
+}
+
+async function fetchFundingTransactions(nativeAuthToken: string): Promise<unknown[]> {
+	const loginResponse = await fetch('http://localhost:3001/login', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${nativeAuthToken}`,
+		},
+	});
+	await loginResponse.json();
+
+	const fundResponse = await fetch('http://localhost:3001/fund-relayer', {
+		method: 'GET',
+		headers: { Authorization: `Bearer ${nativeAuthToken}` },
+	});
+	if (!fundResponse.ok) throw new Error('Failed to get funding transaction');
+	const { transactions: fundTxns } = await fundResponse.json();
+	if (!Array.isArray(fundTxns) || fundTxns.length === 0) {
+		throw new Error('No funding transactions received');
+	}
+	return fundTxns;
+}
+
+function parseCsvContent(content: string, existingWallets: string[]): { validAddresses: string[]; invalidAddresses: string[] } {
+	const lines = content.split(/\r\n|\n/).filter((line) => line.trim());
+	const validAddresses: string[] = [];
+	const invalidAddresses: string[] = [];
+	lines.forEach((line) => {
+		const address = line.trim();
+		if (/^erd1[a-zA-Z0-9]{58}$/.test(address)) {
+			if (!existingWallets.includes(address) && !validAddresses.includes(address)) {
+				validAddresses.push(address);
+			}
+		} else {
+			invalidAddresses.push(address);
+		}
+	});
+	return { validAddresses, invalidAddresses };
+}
+
+function validateWallet(wallet: string, existingWallets: string[]): string | null {
+	if (!wallet) return 'Please enter a wallet address';
+	if (!/^erd1[a-zA-Z0-9]{58}$/.test(wallet)) return 'Please enter a valid MultiversX address (erd1...)';
+	if (existingWallets.includes(wallet)) return 'This wallet is already in the list';
+	return null;
+}
+
+function getButtonText(isPending: boolean, isCreating: boolean): string {
+	if (isPending) return 'Creating Campaign...';
+	if (isCreating) return 'Preparing Transaction...';
+	return 'Create Campaign';
+}
+
+function getFundingButtonText(isPending: boolean, isFunding: boolean): string {
+	if (isPending) return 'Funding Relayer...';
+	if (isFunding) return 'Preparing Funding Transaction...';
+	return 'Fund Relayer';
+}
+
 // Default form data
 const defaultFormData = {
 	question: '',
@@ -235,33 +322,6 @@ export default function CreateVotePage() {
 		setShowFundingInfo(true);
 	};
 
-	const provider = ExtensionProvider.getInstance();
-	const nativeAuthClient = new NativeAuthClient({
-		origin: "https://utils.multiversx.com",
-		expirySeconds: 7200,
-		apiUrl: "https://devnet-api.multiversx.com"
-	});
-
-	const getAuthToken = async () => {
-		// const acc = getAccount();
-		// console.log("add", acc.address)
-		// console.log("sig", acc.signature)
-
-		await provider.init();
-		const nativeAuthInitialPart = await nativeAuthClient.initialize();
-		await provider.login({ token: nativeAuthInitialPart });
-
-		const account = provider.getAccount()
-
-		if (!account || !account.address || !account.signature) {
-			throw new Error("Extension account or credentials not available");
-		  }
-		
-		const address = account.address;
-		const signature = account.signature;
-		return nativeAuthClient.getToken(address, nativeAuthInitialPart, signature)
-	}
-
 	const handleFundRelayer = async () => {
 		setIsFunding(true);
 		setShowFundingInfo(false);
@@ -271,29 +331,7 @@ export default function CreateVotePage() {
 			localStorage.setItem('isFunding', 'true');
 
 			const nativeAuthToken = await getAuthToken();
-			console.log("auth token:", nativeAuthToken);
-
-			const response = await fetch('http://localhost:3001/login', {
-				method: 'POST',
-				headers: {
-				  'Content-Type': 'application/json',
-				  Authorization: `Bearer ${nativeAuthToken}`,
-				},
-			  });
-			  
-			  const data = await response.json();
-			  console.log(data);
-			
-			const fundResponse = await fetch('http://localhost:3001/fund-relayer', {
-				method: 'GET',
-				headers: { Authorization: `Bearer ${nativeAuthToken}` },
-			});
-			if (!fundResponse.ok) throw new Error('Failed to get funding transaction');
-			const { transactions: fundTxns } = await fundResponse.json();
-
-			if (!Array.isArray(fundTxns) || fundTxns.length === 0) {
-				throw new Error('No funding transactions received');
-			}
+			const fundTxns = await fetchFundingTransactions(nativeAuthToken);
 
 			const { sessionId } = await sendTransactions({
 				transactions: fundTxns,
@@ -317,14 +355,7 @@ export default function CreateVotePage() {
 		setIsCreating(true);
 		setCreationError(null);
 		try {
-			if (
-				!formData.question ||
-				!formData.description ||
-				!formData.startDate ||
-				!formData.endDate ||
-				formData.options.length < 2 ||
-				!formData.options.every((option) => option.label)
-			) {
+			if (!isFormValid(formData)) {
 				alert('Please fill in all required fields');
 				setIsCreating(false);
 				return;
@@ -367,27 +398,15 @@ export default function CreateVotePage() {
 	};
 
 	const addWallet = () => {
-		if (!newWallet) {
-			setWalletError('Please enter a wallet address');
+		const error = validateWallet(newWallet, formData.eligibleWallets);
+		if (error) {
+			setWalletError(error);
 			return;
 		}
-
-		// MultiversX address validation
-		if (!/^erd1[a-zA-Z0-9]{58}$/.test(newWallet)) {
-			setWalletError('Please enter a valid MultiversX address (erd1...)');
-			return;
-		}
-
-		if (formData.eligibleWallets.includes(newWallet)) {
-			setWalletError('This wallet is already in the list');
-			return;
-		}
-
 		setFormData((prev) => ({
 			...prev,
 			eligibleWallets: [...prev.eligibleWallets, newWallet],
 		}));
-
 		setNewWallet('');
 		setWalletError('');
 	};
@@ -420,51 +439,25 @@ export default function CreateVotePage() {
 		reader.onload = (event) => {
 			try {
 				const content = event.target?.result as string;
-				if (!content) {
-					throw new Error('Failed to read file content');
-				}
-				const lines = content.split(/\r\n|\n/).filter((line) => line.trim());
+				if (!content) throw new Error('Failed to read file content');
 
-				// Validate addresses
-				const validAddresses: string[] = [];
-				const invalidAddresses: string[] = [];
-
-				lines.forEach((line) => {
-					const address = line.trim();
-					if (/^erd1[a-zA-Z0-9]{58}$/.test(address)) {
-						if (
-							!formData.eligibleWallets.includes(address) &&
-							!validAddresses.includes(address)
-						) {
-							validAddresses.push(address);
-						}
-					} else {
-						invalidAddresses.push(address);
-					}
-				});
+				const { validAddresses, invalidAddresses } = parseCsvContent(content, formData.eligibleWallets);
 
 				if (invalidAddresses.length > 0) {
 					setCsvError(
 						`Found ${invalidAddresses.length} invalid addresses. Please ensure all addresses are in the format erd1... (62 characters)`
 					);
 				}
-
 				if (validAddresses.length > 0) {
 					setFormData((prev) => ({
 						...prev,
 						eligibleWallets: [...prev.eligibleWallets, ...validAddresses],
 					}));
 				}
-
 				setIsUploading(false);
-				// Reset file input
-				if (fileInputRef.current) {
-					fileInputRef.current.value = '';
-				}
+				if (fileInputRef.current) fileInputRef.current.value = '';
 			} catch (error) {
-				setCsvError(
-					'Failed to parse CSV file. Please ensure it contains one MultiversX address per line.'
-				);
+				setCsvError('Failed to parse CSV file. Please ensure it contains one MultiversX address per line.');
 				setIsUploading(false);
 			}
 		};
@@ -475,20 +468,6 @@ export default function CreateVotePage() {
 		};
 
 		reader.readAsText(file);
-	};
-
-	// Update the button text based on transaction status
-	const getButtonText = () => {
-		if (transactionStatus.isPending) return 'Creating Campaign...';
-		if (isCreating) return 'Preparing Transaction...';
-		return 'Create Campaign';
-	};
-
-	// Add this new function to get funding button text
-	const getFundingButtonText = () => {
-		if (transactionStatus.isPending) return 'Funding Relayer...';
-		if (isFunding) return 'Preparing Funding Transaction...';
-		return 'Fund Relayer';
 	};
 
 	return (
@@ -911,7 +890,7 @@ export default function CreateVotePage() {
 													onClick={handleShowFundingInfo}
 													disabled={isFunding || !isStep2Valid}
 												>
-													{getFundingButtonText()}
+													{getFundingButtonText(transactionStatus.isPending, isFunding)}
 												</Button>
 											) : (
 												<Button
@@ -919,7 +898,7 @@ export default function CreateVotePage() {
 													onClick={handleCreateCampaign}
 													disabled={isCreating || transactionStatus.isPending || !isStep2Valid}
 												>
-													{getButtonText()}
+													{getButtonText(transactionStatus.isPending, isCreating)}
 												</Button>
 											)
 										) : (
@@ -928,7 +907,7 @@ export default function CreateVotePage() {
 												onClick={handleCreateCampaign}
 												disabled={isCreating || transactionStatus.isPending || !isStep2Valid}
 											>
-												{getButtonText()}
+												{getButtonText(transactionStatus.isPending, isCreating)}
 											</Button>
 										)}
 									</div>
